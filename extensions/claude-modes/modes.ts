@@ -31,9 +31,18 @@ export function wantsPlan(prompt: string): boolean {
 const READ_ONLY_BASH =
 	/^\s*(ls|pwd|echo|cat|head|tail|wc|file|stat|which|whoami|date|env|printenv|grep|rg|find|fd|tree|diff|du|df|node --version|npm ls|npm view|py(thon)? --version|git (status|log|diff|show|branch|remote|config --get|rev-parse|ls-files))\b/;
 
+// ponytail: rtk-bash rewrites every command to `rtk <cmd>`, so the allowlist must see through it.
+const WRAPPERS = /^\s*(rtk(\s+proxy)?|command|time|nice(\s+-n\s*-?\d+)?)\s+/;
+
+function unwrap(segment: string): string {
+	let out = segment;
+	for (let i = 0; i < 3 && WRAPPERS.test(out); i++) out = out.replace(WRAPPERS, "");
+	return out;
+}
+
 export function bashIsReadOnly(command: string): boolean {
 	const segments = command.split(/&&|\|\||;|\|/);
-	return segments.every((segment) => segment.trim() === "" || READ_ONLY_BASH.test(segment));
+	return segments.every((segment) => segment.trim() === "" || READ_ONLY_BASH.test(unwrap(segment)));
 }
 
 const WRITE_TOOLS = new Set(["write", "edit"]);
@@ -78,6 +87,11 @@ if (process.env.CLAUDE_MODES_SELFTEST) {
 	check(!bashIsReadOnly("rm -rf build"), "destructive bash not read-only");
 	check(!bashIsReadOnly("git status && rm x"), "mixed pipeline not read-only");
 
+	check(bashIsReadOnly("rtk git status"), "rtk wrapper sees through to git status");
+	check(bashIsReadOnly("rtk proxy cat file.txt"), "rtk proxy wrapper");
+	check(!bashIsReadOnly("rtk rm -rf build"), "rtk wrapper does not launder a destructive command");
+	check(gate("plan", "bash", "rtk git status").action === "allow", "plan allows rtk-wrapped read-only bash");
+	check(gate("auto", "bash", "rtk git status").action === "allow", "auto does not ask for rtk-wrapped read-only bash");
 	check(gate("plan", "write", "").action === "block", "plan blocks write");
 	check(gate("plan", "edit", "").action === "block", "plan blocks edit");
 	check(gate("plan", "bash", "rm -rf x").action === "block", "plan blocks destructive bash");
