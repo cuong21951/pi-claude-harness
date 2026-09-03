@@ -44,4 +44,4 @@ settings.packages = [...new Set([...(settings.packages ?? []), ...example.packag
 fs.writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
 console.log(`merged  settings.json (${settings.packages.length} packages)`);
 console.log("\nNext: run `pi install` once so the npm/git packages are fetched, then start `pi`.");
-console.log("Optional: apply patches/pi-mcp-adapter.patch for Claude-style MCP rows (see patches/README.md).");
+console.log("Optional: apply patches/pi-mcp-adapter.patch and patches/pi-deepseek-search.patch for Claude-style MCP and web-search rows (see patches/README.md).");

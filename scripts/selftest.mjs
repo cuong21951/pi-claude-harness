@@ -32,8 +32,10 @@ if (target) {
 		console.log(`${ok ? "PASS" : "FAIL"} ${path.relative(root, file)}`);
 		if (!ok) console.log(run.stdout, run.stderr);
 	}
-	const patch = spawnSync(process.execPath, [path.join(root, "patches/pi-mcp-adapter.selftest.ts")], { env: { ...process.env, PI_DIR }, encoding: "utf8" });
-	console.log(`${patch.status === 0 ? "PASS" : "FAIL"} patches/pi-mcp-adapter.selftest.ts`);
-	if (patch.status !== 0) { failed++; console.log(patch.stdout, patch.stderr); }
+	for (const name of ["pi-mcp-adapter", "pi-deepseek-search"]) {
+		const patch = spawnSync(process.execPath, [path.join(root, `patches/${name}.selftest.ts`)], { env: { ...process.env, PI_DIR }, encoding: "utf8" });
+		console.log(`${patch.status === 0 ? "PASS" : "FAIL"} patches/${name}.selftest.ts`);
+		if (patch.status !== 0) { failed++; console.log(patch.stdout, patch.stderr); }
+	}
 	process.exit(failed ? 1 : 0);
 }

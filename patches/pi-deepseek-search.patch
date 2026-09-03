@@ -1,0 +1,99 @@
+--- a/index.ts
++++ b/index.ts
+@@ -160,6 +160,25 @@
+   "\n\nREMINDER: You MUST include the sources above in your response to the user using markdown hyperlinks.";
+ 
+ // ---------------------------------------------------------------------------
++// Claude Code look: "● Web Search(\"query\")" + "  └ Did 1 search in 12s"
++// ---------------------------------------------------------------------------
++
++const ELBOW = "  └ ";
++const INDENT = "    ";
++const XML_TAG = /<[^>]*(?:tool_calls|invoke|parameter)[^>]*>/g;
++
++export function cleanAnswer(body: string): string {
++  return body.replace(XML_TAG, "").replace(/\n*REMINDER:.*$/s, "").replace(/\n+$/, "");
++}
++
++export function searchSummary(details: unknown, sourceCount: number): string {
++  const ms = (details as { durationMs?: unknown } | undefined)?.durationMs;
++  const took = typeof ms === "number" ? ` in ${Math.max(1, Math.round(ms / 1000))}s` : "";
++  const found = sourceCount > 0 ? ` (${sourceCount} source${sourceCount === 1 ? "" : "s"})` : "";
++  return `Did 1 search${took}${found}`;
++}
++
++// ---------------------------------------------------------------------------
+ // Tool: web_search
+ // ---------------------------------------------------------------------------
+ 
+@@ -206,9 +225,11 @@
+     ],
+     parameters: webSearchParams,
+ 
++    renderShell: "self",
++
+     renderCall(args, theme) {
+       const p = args as { query: string; allowed_domains?: string[]; blocked_domains?: string[] };
+-      let text = theme.fg("toolTitle", theme.bold("web_search ")) + theme.fg("accent", `"${p.query || "..."}"`);
++      let text = theme.fg("toolTitle", theme.bold("● ")) + theme.fg("accent", theme.bold("Web Search")) + theme.fg("toolTitle", `("${p.query || "..."}")`);
+       const tags: string[] = [];
+       if (p.allowed_domains?.length) tags.push(`+${p.allowed_domains.length}d`);
+       if (p.blocked_domains?.length) tags.push(`-${p.blocked_domains.length}d`);
+@@ -216,19 +237,18 @@
+       return new Text(text, 0, 0);
+     },
+ 
+-    renderResult(result, { expanded }, theme) {
+-      const text = result.content[0];
+-      const body = text?.type === "text" ? text.text : "";
+-      const xtag = /<[^>]*(?:tool_calls|invoke|parameter)[^>]*>/g;
+-      const clean = body.replace(xtag, "")
+-        .replace(/\n*REMINDER:.*$/s, "");
+-      const lines = clean.split("\n");
+-      if (!expanded) {
+-        const preview = lines.slice(0, 6);
+-        if (lines.length > 6) preview.push(theme.fg("dim", `... ${lines.length - 6} more lines · ctrl+o to expand`));
+-        return new Text(preview.join("\n"), 0, 0);
+-      }
+-      return new Text(clean, 0, 0);
++    renderResult(result, { expanded, isPartial }, theme) {
++      const elbow = theme.fg("dim", ELBOW);
++      const first = result.content[0];
++      const body = first?.type === "text" ? first.text : "";
++      if (isPartial) return new Text(elbow + theme.fg("dim", body.split("\n")[0] || "…"), 0, 0);
++      if (result.isError) return new Text(elbow + theme.fg("error", `✗ ${body.split("\n")[0]}`), 0, 0);
++      const sources = (result.details as { sources?: unknown[] } | undefined)?.sources;
++      const head = elbow + theme.fg("dim", searchSummary(result.details, Array.isArray(sources) ? sources.length : 0));
++      const clean = cleanAnswer(body);
++      if (!expanded) return new Text(head + theme.fg("dim", " (ctrl+o to expand)"), 0, 0);
++      const lines = clean === "" ? [] : clean.split("\n").map((line) => INDENT + theme.fg("toolOutput", line));
++      return new Text([head, ...lines].join("\n"), 0, 0);
+     },
+ 
+     async execute(_toolCallId, params, signal, onUpdate, ctx) {
+@@ -244,6 +264,7 @@
+ 
+       onUpdate?.({ content: [{ type: "text", text: "Searching…" }] });
+ 
++      const startedAt = Date.now();
+       let firstProgress = true;
+       const onProgress = (msg: string) => {
+         if (firstProgress) {
+@@ -275,15 +296,14 @@
+           onProgress,
+         );
+ 
+-        const xtag = /<[^>]*(?:tool_calls|invoke|parameter)[^>]*>/g;
+         const answer = result.answerParts
+           .join("\n\n")
+-          .replace(xtag, "")
++          .replace(XML_TAG, "")
+           .replace(/\n{3,}/g, "\n\n")
+           .trim() || `No results for: ${query}`;
+         const sourceText = answer + formatSources(result.sources) + CITATION_REMINDER;
+         const footer = `\n\n*${result.tokens.toLocaleString()} tokens · ${result.model}*`;
+-        return { content: [{ type: "text", text: sourceText + footer }], details: { sources: result.sources } };
++        return { content: [{ type: "text", text: sourceText + footer }], details: { sources: result.sources, durationMs: Date.now() - startedAt } };
+       } catch (error) {
+         const message = error instanceof Error ? error.message : String(error);
+         return { content: [{ type: "text", text: `Search failed: ${message}` }], isError: true };

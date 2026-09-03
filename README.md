@@ -48,7 +48,7 @@ node ~/.pi/agent/git/github.com/cuong21951/pi-claude-harness/scripts/install.mjs
 
 `pi install` fetches this repo and registers its extensions, theme, skills and prompts. `install.mjs` copies the config files above into `~/.pi/agent` (never overwriting what is already there), runs `pi install` for each package in `settings.example.json` that is not installed yet, and adds the remaining settings keys only when missing.
 
-Then put your OpenRouter key in `~/.pi/agent/auth.json` (or `OPENROUTER_API_KEY`) and start `pi`. Optional: `patches/pi-mcp-adapter.patch` restyles MCP tool rows, see `patches/README.md`.
+Then put your OpenRouter key in `~/.pi/agent/auth.json` (or `OPENROUTER_API_KEY`) and start `pi`. Optional: `patches/pi-mcp-adapter.patch` restyles MCP tool rows and `patches/pi-deepseek-search.patch` restyles web-search rows, see `patches/README.md`.
 
 Set `PI_CODING_AGENT_DIR` to install somewhere other than `~/.pi/agent`.
 
