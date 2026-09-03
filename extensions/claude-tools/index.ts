@@ -37,12 +37,13 @@ export default function (pi: ExtensionAPI) {
 			renderCall(args: Record<string, unknown>, theme: Theme) {
 				return new Text(callLine(tool, args, style(theme)), 0, 0);
 			},
-			renderResult(result: any, { expanded, isPartial }: { expanded: boolean; isPartial: boolean }, theme: Theme, context: { args: Record<string, unknown> }) {
+			renderResult(result: any, { expanded, isPartial }: { expanded: boolean; isPartial: boolean }, theme: Theme, context: { args: Record<string, unknown>; isError?: boolean }) {
 				const text = result.content
 					.filter((block: { type: string }) => block.type === "text")
 					.map((block: { text?: string }) => block.text ?? "")
 					.join("\n");
-				const outcome = { text, isError: result.isError === true, details: result.details };
+				// ponytail: pi reports a failed tool through the render context, not on the result.
+				const outcome = { text, isError: result.isError === true || context.isError === true, details: result.details };
 				const view = { expanded, isPartial, hint: keyHint("app.tools.expand", "to expand") };
 				return new Text(resultText(tool, context.args, outcome, view, style(theme)), 0, 0);
 			},

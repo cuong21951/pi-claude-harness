@@ -56,12 +56,12 @@
 -        return new Text(preview.join("\n"), 0, 0);
 -      }
 -      return new Text(clean, 0, 0);
-+    renderResult(result, { expanded, isPartial }, theme) {
++    renderResult(result, { expanded, isPartial }, theme, context) {
 +      const elbow = theme.fg("toolTitle", ELBOW);
 +      const first = result.content[0];
 +      const body = first?.type === "text" ? first.text : "";
 +      if (isPartial) return new Text(elbow + theme.fg("dim", body.split("\n")[0] || "…"), 0, 0);
-+      if (result.isError) return new Text(elbow + theme.fg("error", `✗ ${body.split("\n")[0]}`), 0, 0);
++      if (result.isError || (context as { isError?: boolean } | undefined)?.isError) return new Text(elbow + theme.fg("error", `✗ ${body.split("\n")[0]}`), 0, 0);
 +      const sources = (result.details as { sources?: unknown[] } | undefined)?.sources;
 +      const head = elbow + theme.fg("toolTitle", searchSummary(result.details, Array.isArray(sources) ? sources.length : 0));
 +      const clean = cleanAnswer(body);
