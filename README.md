@@ -53,7 +53,7 @@ Set `PI_CODING_AGENT_DIR` to install somewhere other than `~/.pi/agent`.
 
 ## Notes
 
-- `tuiMode: regular` behaves like Claude Code (terminal owns scrollback and the mouse wheel). The cat animates only while the header is still on screen; once the transcript is taller than the terminal it freezes, because pi-tui answers any change above the viewport with a full redraw.
+- `tuiMode: fullscreen` (alt screen, differential repaint, cat always animated) is the default. `regular` behaves more like Claude Code (terminal owns scrollback and the mouse wheel), but there the cat only animates while the header is still on screen: once the transcript is taller than the terminal it freezes, because pi-tui answers any change above the viewport with a full redraw.
 - The cheap-model guard exists because pi picks the first model of the provider list when `defaultModel` is unset, and on OpenRouter that is a frontier model. Keep `defaultModel` set.
 - `rtk-bash` and `api-balance` are harmless without rtk / without keys.
 

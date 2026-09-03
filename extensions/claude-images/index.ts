@@ -46,6 +46,7 @@ export function attach(text: string, pending: Pending, existing: ImageContent[] 
 export default function (pi: ExtensionAPI) {
 	const pending: Pending = new Map();
 	let counter = 0;
+	let pasting = false;
 
 	pi.on("session_start", () => {
 		pending.clear();
@@ -55,13 +56,18 @@ export default function (pi: ExtensionAPI) {
 	pi.registerShortcut("alt+v", {
 		description: "Paste clipboard image as [Image #N]",
 		handler: async (ctx) => {
-			if (!ctx.hasUI) return;
-			const clip = await readClipboard();
-			if (!clip) return ctx.ui.notify("Clipboard has no image or text", "warning");
-			if (clip.kind === "txt") return ctx.ui.setEditorText(ctx.ui.getEditorText() + Buffer.from(clip.base64, "base64").toString("utf8"));
-			const n = ++counter;
-			pending.set(n, { type: "image", data: clip.base64, mimeType: "image/png" });
-			ctx.ui.setEditorText(`${ctx.ui.getEditorText()}[Image #${n}] `);
+			if (!ctx.hasUI || pasting) return;
+			pasting = true;
+			try {
+				const clip = await readClipboard();
+				if (!clip) return ctx.ui.notify("Clipboard has no image or text", "warning");
+				if (clip.kind === "txt") return ctx.ui.setEditorText(ctx.ui.getEditorText() + Buffer.from(clip.base64, "base64").toString("utf8"));
+				const n = ++counter;
+				pending.set(n, { type: "image", data: clip.base64, mimeType: "image/png" });
+				ctx.ui.setEditorText(`${ctx.ui.getEditorText()}[Image #${n}] `);
+			} finally {
+				pasting = false;
+			}
 		},
 	});
 
