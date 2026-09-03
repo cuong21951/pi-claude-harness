@@ -43,10 +43,9 @@ A [pi](https://pi.dev) coding-agent setup that looks and behaves like Claude Cod
 npm install -g @earendil-works/pi-coding-agent
 pi install git:github.com/cuong21951/pi-claude-harness
 node ~/.pi/agent/git/github.com/cuong21951/pi-claude-harness/scripts/install.mjs
-pi install
 ```
 
-The first `pi install` fetches this repo and registers its extensions, theme, skills and prompts. `install.mjs` copies the config files above into `~/.pi/agent` (never overwriting what is already there) and merges `settings.example.json` into `settings.json`: the package list is unioned, other keys are only added when missing. The second `pi install` fetches the npm packages that list added.
+`pi install` fetches this repo and registers its extensions, theme, skills and prompts. `install.mjs` copies the config files above into `~/.pi/agent` (never overwriting what is already there), runs `pi install` for each package in `settings.example.json` that is not installed yet, and adds the remaining settings keys only when missing.
 
 Then put your OpenRouter key in `~/.pi/agent/auth.json` (or `OPENROUTER_API_KEY`) and start `pi`. Optional: `patches/pi-mcp-adapter.patch` restyles MCP tool rows, see `patches/README.md`.
 
