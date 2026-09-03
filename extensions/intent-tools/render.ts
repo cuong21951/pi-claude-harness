@@ -5,7 +5,7 @@ const INDENT = "    ";
 const EXPANDED_MAX = 20;
 
 export function callLine(intent: string, s: Style): string {
-	return s.fg("toolTitle", s.bold("● ")) + s.fg("text", intent);
+	return s.fg("success", s.bold("● ")) + s.fg("toolTitle", intent);
 }
 
 // ponytail: Claude Code shows the first output line and "… +N lines"; the whole output only on ctrl+o.

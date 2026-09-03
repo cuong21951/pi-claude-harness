@@ -51,7 +51,7 @@ export function callArgs(tool: string, args: Record<string, unknown>, home: stri
 }
 
 export function callLine(tool: string, args: Record<string, unknown>, s: Style): string {
-	return s.fg("toolTitle", s.bold("● ")) + s.fg("accent", s.bold(LABEL[tool] ?? tool)) + s.fg("toolTitle", `(${callArgs(tool, args ?? {}, s.home)})`);
+	return s.fg("success", s.bold("● ")) + s.fg("toolTitle", s.bold(LABEL[tool] ?? tool)) + s.fg("toolTitle", `(${callArgs(tool, args ?? {}, s.home)})`);
 }
 
 function lineCount(text: string): number {
@@ -108,7 +108,7 @@ function bodyLines(tool: string, args: Record<string, unknown>, outcome: ToolOut
 }
 
 export function resultText(tool: string, args: Record<string, unknown>, outcome: ToolOutcome, view: ResultView, s: Style): string {
-	const elbow = s.fg("dim", "  └ ");
+	const elbow = s.fg("toolTitle", "  └ ");
 	if (view.isPartial) return elbow + s.fg("dim", "…");
 	if (outcome.isError) {
 		const [first, ...rest] = outcome.text.split("\n");
@@ -116,7 +116,7 @@ export function resultText(tool: string, args: Record<string, unknown>, outcome:
 		return elbow + s.fg("error", `✗ ${first}`) + tail;
 	}
 	const { lines, hidden } = bodyLines(tool, args ?? {}, outcome, view.expanded, s);
-	let head = elbow + s.fg("dim", summary(tool, args ?? {}, outcome, s.home));
+	let head = elbow + s.fg("toolTitle", summary(tool, args ?? {}, outcome, s.home));
 	if (hidden > 0) head += s.fg("dim", ` (${view.hint})`);
 	return [head, ...lines.map((line) => INDENT + line)].join("\n");
 }

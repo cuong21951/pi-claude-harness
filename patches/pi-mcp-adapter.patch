@@ -193,18 +193,19 @@
    };
  }
  
-@@ -429,6 +458,73 @@
+@@ -429,6 +458,74 @@
    return { lines, truncated: false };
  }
  
 +function formatMcpCompactTitleLine(title: string, argsPreview: string, theme: RenderTheme): string {
++  const styledBullet = theme.fg("success", theme.bold ? theme.bold(COMPACT_BULLET) : COMPACT_BULLET);
 +  const styledTitle = theme.fg("toolTitle", theme.bold ? theme.bold(title) : title);
-+  const styledArgs = argsPreview ? theme.fg("muted", argsPreview) : "";
-+  return `${COMPACT_BULLET}${styledTitle}${styledArgs}`;
++  const styledArgs = argsPreview ? theme.fg("toolTitle", argsPreview) : "";
++  return `${styledBullet}${styledTitle}${styledArgs}`;
 +}
 +
 +function formatMcpCompactPartialRow(theme: RenderTheme): string {
-+  return theme.fg("muted", `${COMPACT_RESULT_PREFIX}…`);
++  return theme.fg("toolTitle", `${COMPACT_RESULT_PREFIX}…`);
 +}
 +
 +function formatMcpCompactErrorRow(result: Pick<AgentToolResult<McpToolResultDetails>, "content">, theme: RenderTheme): string {
@@ -225,8 +226,8 @@
 +function formatMcpCompactResultRows(shownLines: string[], hiddenLineCount: number, theme: RenderTheme): string {
 +  const bodyLines = shownLines.length > 0 ? shownLines : [""];
 +  const rows = bodyLines.map((line, index) => {
-+    const prefix = index === 0 ? theme.fg("muted", COMPACT_RESULT_PREFIX) : COMPACT_RESULT_CONTINUATION_PREFIX;
-+    return `${prefix}${theme.fg("toolOutput", line)}`;
++    const prefix = index === 0 ? theme.fg("toolTitle", COMPACT_RESULT_PREFIX) : COMPACT_RESULT_CONTINUATION_PREFIX;
++    return `${prefix}${theme.fg(index === 0 ? "toolTitle" : "toolOutput", line)}`;
 +  });
 +  if (hiddenLineCount > 0) {
 +    rows[rows.length - 1] += theme.fg("muted", ` … +${hiddenLineCount} lines (ctrl+o to expand)`);
@@ -267,7 +268,7 @@
  export function renderMcpToolResult(
    result: AgentToolResult<McpToolResultDetails>,
    options: ToolRenderResultOptions,
-@@ -437,19 +533,17 @@
+@@ -437,19 +534,17 @@
    renderOptions = resolveMcpToolRenderOptions(),
  ) {
    const activeTheme = theme ?? plainTheme;

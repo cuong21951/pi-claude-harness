@@ -88,7 +88,7 @@ export default function (pi: ExtensionAPI) {
 		},
 
 		renderResult(result, { expanded, isPartial }, theme) {
-			if (isPartial) return new Text(theme.fg("dim", "  └ ") + theme.fg("dim", "Running…"), 0, 0);
+			if (isPartial) return new Text(theme.fg("toolTitle", "  └ ") + theme.fg("toolTitle", "Running…"), 0, 0);
 
 			const details = result.details as BashToolDetails | undefined;
 			const content = result.content[0];
@@ -96,7 +96,7 @@ export default function (pi: ExtensionAPI) {
 			const exitMatch = output.match(/exit(?:ed with)? code:? (\d+)/);
 			const exitCode = exitMatch ? parseInt(exitMatch[1], 10) : null;
 			const [head, ...rest] = resultLines(output, exitCode, expanded, details?.truncation?.truncated === true);
-			const painted = theme.fg(exitCode && exitCode !== 0 ? "error" : "dim", head);
+			const painted = theme.fg(exitCode && exitCode !== 0 ? "error" : "toolTitle", head);
 			return new Text([painted, ...rest.map((line) => theme.fg("toolOutput", line))].join("\n"), 0, 0);
 		},
 	});

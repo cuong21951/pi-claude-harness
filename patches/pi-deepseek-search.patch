@@ -35,7 +35,7 @@
      renderCall(args, theme) {
        const p = args as { query: string; allowed_domains?: string[]; blocked_domains?: string[] };
 -      let text = theme.fg("toolTitle", theme.bold("web_search ")) + theme.fg("accent", `"${p.query || "..."}"`);
-+      let text = theme.fg("toolTitle", theme.bold("● ")) + theme.fg("accent", theme.bold("Web Search")) + theme.fg("toolTitle", `("${p.query || "..."}")`);
++      let text = theme.fg("success", theme.bold("● ")) + theme.fg("toolTitle", theme.bold("Web Search")) + theme.fg("toolTitle", `("${p.query || "..."}")`);
        const tags: string[] = [];
        if (p.allowed_domains?.length) tags.push(`+${p.allowed_domains.length}d`);
        if (p.blocked_domains?.length) tags.push(`-${p.blocked_domains.length}d`);
@@ -57,13 +57,13 @@
 -      }
 -      return new Text(clean, 0, 0);
 +    renderResult(result, { expanded, isPartial }, theme) {
-+      const elbow = theme.fg("dim", ELBOW);
++      const elbow = theme.fg("toolTitle", ELBOW);
 +      const first = result.content[0];
 +      const body = first?.type === "text" ? first.text : "";
 +      if (isPartial) return new Text(elbow + theme.fg("dim", body.split("\n")[0] || "…"), 0, 0);
 +      if (result.isError) return new Text(elbow + theme.fg("error", `✗ ${body.split("\n")[0]}`), 0, 0);
 +      const sources = (result.details as { sources?: unknown[] } | undefined)?.sources;
-+      const head = elbow + theme.fg("dim", searchSummary(result.details, Array.isArray(sources) ? sources.length : 0));
++      const head = elbow + theme.fg("toolTitle", searchSummary(result.details, Array.isArray(sources) ? sources.length : 0));
 +      const clean = cleanAnswer(body);
 +      if (!expanded) return new Text(head + theme.fg("dim", " (ctrl+o to expand)"), 0, 0);
 +      const lines = clean === "" ? [] : clean.split("\n").map((line) => INDENT + theme.fg("toolOutput", line));
