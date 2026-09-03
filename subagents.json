@@ -1,5 +1,5 @@
 {
-  "widgetMode": "off",
+  "widgetMode": "background",
   "fleetView": true,
   "showCost": true,
   "backgroundByDefault": true,

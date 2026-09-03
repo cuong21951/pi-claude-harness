@@ -11,14 +11,15 @@ A [pi](https://pi.dev) coding-agent setup that looks and behaves like Claude Cod
 | `claude-header` | Cat mascot (blinks, wags, drops a heart while the header is on screen) + `pi vX`, model with effort and provider, cwd |
 | `claude-tools` | read/write/edit/grep/find/ls render as `● Read(path)` / `  └ Read N lines`, `● Update(path)` + diff, `● Search(pattern: …)` |
 | `intent-tools` | bash rows show the model's one-line intent as `● description` + first output line, `ctrl+o` to expand |
-| `claude-messages` | `● ` before assistant paragraphs, `✻ Thinking…` label |
+| `claude-messages` | `● ` before assistant paragraphs, `✻ Thought` label on collapsed thinking blocks |
 | `claude-working` | Claude's sparkle spinner `· ✢ * ✶ ✻ ✽` with a shimmer over the verb, elapsed time, tokens, `esc to interrupt` |
 | `claude-footer` | One muted line: extension statuses · model · think level · ctx % · $cost · git branch |
 | `claude-input` | Flat rules above and below with a `> ` prompt, exactly like Claude Code 2.1.259 |
 | `claude-bottom-input` | In `regular` TUI mode, pads above the editor so the prompt and footer sit on the bottom rows like fullscreen (0 rows once the transcript overflows; never triggers a full redraw) |
 | `claude-images` | `alt+v` pastes a clipboard image as an `[Image #N]` chip (Windows only; other platforms keep pi's `ctrl+v`) |
 | `claude-mcp-render` | Drops the schema dump MCP tools append on validation errors |
-| `themes/claude-dark` | Dark theme, Claude orange accents, daltonized diff colours |
+| `claude-modes` | `shift+tab` cycles normal / plan / yolo with a `[PLAN]` badge, and offers plan mode when a message reads like a planning request |
+| `themes/claude-dark` | Palette taken from Claude Code's own `dark-daltonized` theme: white text, `#3399ff` tool dot, `#af87ff` skill dot, `#ff6666` error, blue/red diffs, tool backgrounds painted out so no row sits in a coloured box |
 
 **Harness**
 
@@ -36,7 +37,29 @@ A [pi](https://pi.dev) coding-agent setup that looks and behaves like Claude Cod
 | `skills/` | browser-tools (Windows-patched copy of badlogic's), frontend-design, run-research, search-youtube |
 | `AGENTS.md` | Global rules: finish the job, verify before claiming, review method, taste rules, risky actions, model routing, output shape |
 | `models.json` | OpenRouter entries for GLM 5.3 Flash and Muse Spark with pricing and thinking-level maps |
-| `keybindings.json` | `ctrl+p`/`ctrl+n` prompt history, `ctrl+alt+v` for pi's own image paste (frees `alt+v`) |
+| `keybindings.json` | `ctrl+p`/`ctrl+n` prompt history, `ctrl+alt+v` for pi's own image paste (frees `alt+v`), `ctrl+alt+t` for the thinking-level cycle (frees `shift+tab` for the mode cycle) |
+
+## Claude parity
+
+What the harness matches today, and what it does not, so the next pass starts from a ledger instead of a guess.
+
+**Matched**
+
+- Row shape everywhere: `● Label(args)` on the call line, `  └ summary` on the result, `ctrl+o` to expand. File tools, bash, skills, MCP and web search all agree.
+- Colours measured, not guessed. Claude's palette was read out of its own binary and the rendered rows were sampled pixel by pixel from a side-by-side capture. The theme targets `dark-daltonized`, which is what a colour-blind-safe Claude install uses.
+- The dot carries meaning: blue for a tool, purple for a skill, red only on failure.
+- No coloured block behind a tool row, because Claude never draws one.
+- Modes on `shift+tab`, with the plan-mode offer when you ask for a plan.
+- Subagent progress: the live widget (spinner per agent, tick or cross when it lands) and the fleet list are both on.
+
+**Not matched yet**
+
+- Markdown inside messages. Link, inline-code and heading colours are still pi's own; Claude's were never measured, so they were left alone rather than guessed.
+- No `accept edits` mode. Claude cycles through one; the permission extension exposes no runtime API for a narrower auto-approve, so the cycle stops at yolo.
+- Yolo is not instant. It writes the permission config and reloads extensions, because that extension reads its config once at load.
+- Plan mode has two owners. `claude-modes` enforces it, while pi's bundled `plan-mode` example still ships its own `/plan` and `/todos` on `ctrl+alt+p`.
+- The collapsed thinking line says `✻ Thought` with no duration; Claude says `Thought for Ns`.
+- The header cat keeps its own orange. The `warning` role was deliberately left on `#d97757` so the cat does not change.
 
 ## Install
 
