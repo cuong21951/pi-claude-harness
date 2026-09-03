@@ -18,7 +18,7 @@ A [pi](https://pi.dev) coding-agent setup that looks and behaves like Claude Cod
 | `claude-bottom-input` | In `regular` TUI mode, pads above the editor so the prompt and footer sit on the bottom rows like fullscreen (0 rows once the transcript overflows; never triggers a full redraw) |
 | `claude-images` | `alt+v` pastes a clipboard image as an `[Image #N]` chip (Windows only; other platforms keep pi's `ctrl+v`) |
 | `claude-mcp-render` | Drops the schema dump MCP tools append on validation errors |
-| `claude-modes` | `shift+tab` cycles normal / plan / yolo with a `[PLAN]` badge, and offers plan mode when a message reads like a planning request |
+| `claude-modes` | `shift+tab` cycles plan / auto / yolo with a `[PLAN]` or `[AUTO]` badge. Plan blocks writes and allows only read-only bash; auto applies edits without asking but confirms a side-effecting bash; yolo asks nothing. It also offers plan mode when a message reads like a planning request |
 | `themes/claude-dark` | Palette taken from Claude Code's own `dark-daltonized` theme: white text, `#3399ff` tool dot, `#af87ff` skill dot, `#ff6666` error, blue/red diffs, tool backgrounds painted out so no row sits in a coloured box |
 
 **Harness**
@@ -55,10 +55,11 @@ What the harness matches today, and what it does not, so the next pass starts fr
 **Not matched yet**
 
 - Markdown inside messages. Link, inline-code and heading colours are still pi's own; Claude's were never measured, so they were left alone rather than guessed.
-- No `accept edits` mode. Claude cycles through one; the permission extension exposes no runtime API for a narrower auto-approve, so the cycle stops at yolo.
-- Yolo is not instant. It writes the permission config and reloads extensions, because that extension reads its config once at load.
+- `auto` is enforced by this harness, not by the permission extension, which exposes no runtime API for a narrower auto-approve. If your own permission policy also asks for bash, you will see two prompts.
+- Yolo takes effect from your next message, not mid-turn, because the permission extension re-reads its config at the start of each turn.
 - Plan mode has two owners. `claude-modes` enforces it, while pi's bundled `plan-mode` example still ships its own `/plan` and `/todos` on `ctrl+alt+p`.
 - The collapsed thinking line says `✻ Thought` with no duration; Claude says `Thought for Ns`.
+- Assistant body text is the terminal's default foreground, not `#ffffff`. pi's markdown renderer paints headings, links and code from the theme but leaves paragraph text uncoloured, and the theme has no key for it, so matching Claude's pure white would take a patch to pi itself.
 - The header cat keeps its own orange. The `warning` role was deliberately left on `#d97757` so the cat does not change.
 
 ## Install

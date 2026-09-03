@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { BADGE, bashAllowedInPlan, type Mode, nextMode, toolBlockedInPlan, wantsPlan } from "./modes.ts";
+import { BADGE, gate, type Mode, NOTICE, nextMode, wantsPlan } from "./modes.ts";
 
 const PERMISSION_CONFIG =
 	process.env.CLAUDE_MODES_PERMISSION_CONFIG ?? join(getAgentDir(), "extensions", "pi-permission-system", "config.json");
@@ -14,68 +14,60 @@ function readYolo(): boolean {
 	}
 }
 
-function writeYolo(on: boolean): boolean {
+function writeYolo(on: boolean): void {
 	try {
 		const config = JSON.parse(readFileSync(PERMISSION_CONFIG, "utf8"));
-		if (config.yoloMode === on) return false;
+		if (config.yoloMode === on) return;
 		writeFileSync(PERMISSION_CONFIG, `${JSON.stringify({ ...config, yoloMode: on }, null, 2)}\n`);
-		return true;
 	} catch {
-		return false;
+		// leave the operator's config alone if it cannot be parsed
 	}
 }
 
 export default function (pi: ExtensionAPI) {
-	let mode: Mode = "normal";
+	let mode: Mode = "auto";
 	let offerDeclined = false;
 
 	// ponytail: the permission extension re-reads its config at every turn start, so writing the
-	// file is enough; no reload, and reload() only exists on command contexts anyway.
+	// file is enough; reload() exists only on command contexts anyway.
 	function apply(target: Mode, ctx: any) {
 		mode = target;
 		writeYolo(mode === "yolo");
 		if (!ctx.hasUI) return;
 		ctx.ui.setStatus("modes", BADGE[mode]);
-		ctx.ui.notify(
-			mode === "plan"
-				? "Plan mode. Writes are blocked, bash is read-only."
-				: mode === "yolo"
-					? "Yolo mode. Permission prompts are off from your next message."
-					: "Normal mode. Permissions are enforced from your next message.",
-			"info",
-		);
+		ctx.ui.notify(NOTICE[mode], "info");
 	}
 
 	pi.on("session_start", async (_event, ctx) => {
-		mode = readYolo() ? "yolo" : "normal";
+		mode = readYolo() ? "yolo" : "auto";
 		if (ctx.hasUI) ctx.ui.setStatus("modes", BADGE[mode]);
 	});
 
 	pi.registerShortcut("shift+tab", {
-		description: "Cycle mode (normal / plan / yolo)",
+		description: "Cycle mode (plan / auto / yolo)",
 		handler: async (ctx) => apply(nextMode(mode), ctx),
 	});
 
 	pi.registerCommand("mode", {
-		description: "Cycle mode (normal / plan / yolo)",
+		description: "Cycle mode (plan / auto / yolo)",
 		handler: async (_args, ctx) => apply(nextMode(mode), ctx),
 	});
 
 	pi.on("before_agent_start", async (event, ctx) => {
-		if (mode !== "normal" || offerDeclined || !ctx.hasUI) return;
+		if (mode === "plan" || offerDeclined || !ctx.hasUI) return;
 		if (!wantsPlan(String(event.prompt ?? ""))) return;
 		const yes = await ctx.ui.confirm("Plan mode?", "This reads like a planning request. Switch to plan mode (read-only) first?");
 		if (yes) apply("plan", ctx);
 		else offerDeclined = true;
 	});
 
-	pi.on("tool_call", async (event) => {
-		if (mode !== "plan") return;
-		if (toolBlockedInPlan(event.toolName)) {
-			return { block: true, reason: `Plan mode: ${event.toolName} is blocked. Cycle out of plan mode with shift+tab to make changes.` };
-		}
-		if (event.toolName === "bash" && !bashAllowedInPlan(String((event.input as { command?: unknown }).command ?? ""))) {
-			return { block: true, reason: "Plan mode: only read-only bash is allowed. Cycle out of plan mode with shift+tab to run this." };
-		}
+	pi.on("tool_call", async (event, ctx) => {
+		const command = String((event.input as { command?: unknown } | undefined)?.command ?? "");
+		const decision = gate(mode, event.toolName, command);
+		if (decision.action === "allow") return;
+		if (decision.action === "block") return { block: true, reason: decision.reason };
+		if (!ctx.hasUI) return;
+		const ok = await ctx.ui.confirm("Run this command?", decision.question);
+		if (!ok) return { block: true, reason: "Declined. Press shift+tab for yolo mode to stop being asked." };
 	});
 }
