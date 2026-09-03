@@ -1,3 +1,4 @@
+import * as fs from "node:fs";
 import * as os from "node:os";
 import { VERSION, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
@@ -56,6 +57,11 @@ export function headerFits(viewportTop: number | undefined): boolean {
 
 let ticker: ReturnType<typeof setInterval> | undefined;
 
+const log = (line: string) => {
+	if (process.env.CLAUDE_HEADER_LOG) fs.appendFileSync(process.env.CLAUDE_HEADER_LOG, `${new Date().toISOString()} ${line}
+`);
+};
+
 export default function (pi: ExtensionAPI) {
 	pi.on("session_start", (_event, ctx) => {
 		if (!ctx.hasUI) return;
@@ -64,12 +70,15 @@ export default function (pi: ExtensionAPI) {
 			const fits = () => headerFits((tui as { previousViewportTop?: number }).previousViewportTop);
 			clearInterval(ticker);
 			ticker = setInterval(() => {
+				const viewportTop = (tui as { previousViewportTop?: number }).previousViewportTop;
+				log(`tick viewportTop=${viewportTop} frame=${frame} now=${frameNow()}`);
 				if (fits() && frameNow() !== frame) tui.requestRender();
 			}, FRAME_MS);
 			ticker.unref?.();
 			return {
 				render: (width: number) => {
 					if (fits()) frame = frameNow();
+					log(`render width=${width} frame=${frame}`);
 					return composeHeader(
 						ctx.model?.name ?? ctx.model?.id ?? "no model",
 						ctx.model?.provider ?? "",
