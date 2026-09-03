@@ -34,7 +34,7 @@ A [pi](https://pi.dev) coding-agent setup that looks and behaves like Claude Cod
 | `prompts/` | `/implement`, `/implement-and-review`, `/scout-and-plan` chains |
 | `skills/` | browser-tools (Windows-patched copy of badlogic's), frontend-design, run-research, search-youtube |
 | `AGENTS.md` | Global rules: finish the job, verify before claiming, review method, taste rules, risky actions, model routing, output shape |
-| `models.json` | OpenRouter entries for GLM 5.3 Flash and Muse Spark, plus an optional local OpenAI-compatible proxy provider (`commandcode`, delete it if you do not run one) |
+| `models.json` | OpenRouter entries for GLM 5.3 Flash and Muse Spark with pricing and thinking-level maps |
 | `keybindings.json` | `ctrl+p`/`ctrl+n` prompt history, `ctrl+alt+v` for pi's own image paste (frees `alt+v`) |
 
 ## Install
