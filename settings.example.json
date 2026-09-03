@@ -1,0 +1,31 @@
+{
+  "defaultProvider": "openrouter",
+  "defaultModel": "z-ai/glm-5.3-flash",
+  "defaultThinkingLevel": "medium",
+  "enabledModels": [
+    "openrouter/z-ai/glm-5.3-flash",
+    "openrouter/deepseek/deepseek-v4-flash*"
+  ],
+  "packages": [
+    "git:github.com/cuong21951/pi-claude-harness",
+    "git:github.com/badlogic/pi-skills",
+    "npm:pi-mcp-adapter",
+    "npm:@dietrichgebert/ponytail",
+    "npm:pi-deepseek-search",
+    "npm:pi-web-access",
+    "npm:@juicesharp/rpiv-ask-user-question",
+    "npm:pi-worktree",
+    "npm:@tintinweb/pi-subagents",
+    "npm:@gotgenes/pi-permission-system",
+    "npm:pi-auto-fallback"
+  ],
+  "compaction": { "enabled": true, "reserveTokens": 200000, "keepRecentTokens": 80000 },
+  "retry": { "enabled": true, "maxRetries": 3, "provider": { "maxRetries": 0 } },
+  "theme": "claude-dark",
+  "tuiMode": "regular",
+  "hideThinkingBlock": true,
+  "quietStartup": true,
+  "showHardwareCursor": true,
+  "treeFilterMode": "no-tools",
+  "outputPad": 1
+}

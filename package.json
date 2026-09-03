@@ -1,0 +1,39 @@
+{
+  "name": "pi-claude-harness",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A pi coding-agent harness that looks and behaves like Claude Code: tool rows, sparkle spinner, one-line footer, rounded input, dark theme, plus tool permissions, cheap-model guard, auto-fallback, subagents, skills and prompt chains",
+  "type": "module",
+  "license": "MIT",
+  "pi": {
+    "extensions": [
+      "./extensions/claude-working",
+      "./extensions/intent-tools",
+      "./extensions/claude-header",
+      "./extensions/claude-tools",
+      "./extensions/claude-messages",
+      "./extensions/claude-mcp-render",
+      "./extensions/claude-footer",
+      "./extensions/claude-input",
+      "./extensions/claude-images",
+      "./extensions/cheap-models",
+      "./extensions/deepseek-guards",
+      "./extensions/no-code-comments",
+      "./extensions/rtk-bash",
+      "./extensions/api-balance"
+    ],
+    "themes": [
+      "./themes"
+    ],
+    "skills": [
+      "./skills"
+    ],
+    "prompts": [
+      "./prompts"
+    ]
+  },
+  "scripts": {
+    "install-config": "node scripts/install.mjs",
+    "test": "node scripts/selftest.mjs"
+  }
+}

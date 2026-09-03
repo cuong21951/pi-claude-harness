@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/gotgenes/pi-packages/main/packages/pi-permission-system/schemas/permissions.schema.json",
+  "yoloMode": true,
+  "permissionReviewLog": true,
+  "permission": {
+    "*": "allow",
+    "path": {
+      "*": "allow",
+      "~/.claude/.credentials.json": "deny"
+    },
+    "bash": {
+      "*": "allow"
+    },
+    "external_directory": "allow"
+  }
+}

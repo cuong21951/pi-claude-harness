@@ -1,0 +1,6 @@
+{
+  "maxInputPerM": 1,
+  "maxOutputPerM": 3,
+  "allow": ["commandcode/*", "deepseek/deepseek-v4-flash*", "openrouter/z-ai/glm-5.3-flash", "openrouter/deepseek/deepseek-v4-flash*"],
+  "deny": ["*fable*", "*opus*", "*sonnet*", "*gpt-5*", "*gemini-pro*", "*grok*", "commandcode/zai-org/GLM-5.3"]
+}

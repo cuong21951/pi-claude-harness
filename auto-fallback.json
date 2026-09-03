@@ -1,0 +1,74 @@
+{
+  "enabled": true,
+  "chains": [
+    {
+      "name": "openrouter-first",
+      "models": [
+        "openrouter/z-ai/glm-5.3-flash",
+        "openrouter/deepseek/deepseek-v4-flash"
+      ]
+    }
+  ],
+  "maxFailoversPerRequest": 2,
+  "requireNoToolCalls": true,
+  "retryableStatusCodes": [
+    408,
+    409,
+    425,
+    429,
+    500,
+    502,
+    503,
+    504,
+    520,
+    521,
+    522,
+    523,
+    524,
+    525,
+    526,
+    527,
+    529
+  ],
+  "retryablePatterns": [
+    "timeout",
+    "timed out",
+    "origin_response_timeout",
+    "error 524",
+    "http 524",
+    "rate limit",
+    "too many requests",
+    "overloaded",
+    "unavailable",
+    "resource_exhausted",
+    "econnreset",
+    "econnrefused",
+    "etimedout",
+    "socket hang up",
+    "fetch failed",
+    "connection reset",
+    "connection refused",
+    "connection error",
+    "api connection error",
+    "network error",
+    "quota",
+    "insufficient balance",
+    "insufficient credits",
+    "credit",
+    "limit exceeded",
+    "usage limit"
+  ],
+  "nonRetryablePatterns": [
+    "invalid api key",
+    "authentication",
+    "unauthorized",
+    "forbidden",
+    "invalid model",
+    "model not found",
+    "context_length_exceeded",
+    "context window",
+    "maximum context length"
+  ],
+  "retryInstruction": "The previous model request failed because of a transient provider/network error. Retry the immediately preceding user request exactly, without changing its intent. Do not mention this fallback unless it materially affects the answer.",
+  "notify": true
+}

@@ -1,0 +1,7 @@
+{
+  "widgetMode": "off",
+  "fleetView": true,
+  "showCost": true,
+  "backgroundByDefault": true,
+  "scopeModels": true
+}

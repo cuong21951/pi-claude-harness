@@ -1,0 +1,55 @@
+{
+  "mcpServers": {
+    "chrome-devtools": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "chrome-devtools-mcp@latest",
+        "--browserUrl",
+        "http://127.0.0.1:9222"
+      ]
+    },
+    "azure-devops": {
+      "command": "mcp-server-azuredevops",
+      "args": [
+        "<your-ado-org>",
+        "-a",
+        "pat"
+      ],
+      "env": {
+        "PERSONAL_ACCESS_TOKEN": "<PAT from Azure DevOps>"
+      },
+      "lifecycle": "keep-alive",
+      "directTools": [
+        "wit_work_item",
+        "wit_query",
+        "search_workitem",
+        "repo_pull_request",
+        "repo_pull_request_thread",
+        "repo_pull_request_thread_write",
+        "repo_file",
+        "core_list_project_teams",
+        "work_list_team_iterations"
+      ]
+    },
+    "azure-devops-tbr": {
+      "command": "mcp-server-azuredevops",
+      "args": [
+        "<second-ado-org>"
+      ],
+      "lifecycle": "lazy",
+      "directTools": [
+        "pipelines_build",
+        "pipelines_definition",
+        "pipelines_run",
+        "repo_file"
+      ]
+    }
+  },
+  "settings": {
+    "hostConfigDiscovery": "on",
+    "toolResultRendering": "compact",
+    "collapsedResultLines": 2,
+    "mcpFooterStatus": "compact"
+  }
+}

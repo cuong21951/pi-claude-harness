@@ -1,0 +1,305 @@
+--- a/tool-result-renderer.ts
++++ b/tool-result-renderer.ts
+@@ -1,5 +1,5 @@
+ import type { AgentToolResult, ToolRenderResultOptions } from "@earendil-works/pi-coding-agent";
+-import { type Component, Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
++import { type Component, Text } from "@earendil-works/pi-tui";
+ 
+ type McpToolResultDetails = Record<string, unknown> & { error?: unknown };
+ type McpToolContentBlock = AgentToolResult<McpToolResultDetails>["content"][number];
+@@ -67,63 +67,23 @@
+   invalidate(): void {}
+ }
+ 
++const COMPACT_BULLET = "● ";
++const COMPACT_RESULT_PREFIX = "  └ ";
++const COMPACT_RESULT_CONTINUATION_PREFIX = "    ";
++
+ class CompactMcpToolResult implements Component {
+-  private rendered: { width: number; lines: string[] } | null = null;
++  private readonly text: Text;
+ 
+-  constructor(
+-    private readonly title: string,
+-    private readonly inputPreview: string,
+-    private readonly display: McpToolResultDisplay,
+-    private readonly theme: RenderTheme,
+-  ) {}
++  constructor(content: string) {
++    this.text = new Text(content, 0, 0);
++  }
+ 
+   render(width: number): string[] {
+-    const safeWidth = Math.max(1, Math.floor(width));
+-    if (this.rendered?.width === safeWidth) return this.rendered.lines;
+-
+-    const resultLines = this.display.lines.filter((line, index, lines) => {
+-      return !(this.display.truncated && index === lines.length - 1 && line === "…");
+-    });
+-    const lines = resultLines.length > 0 ? resultLines : [""];
+-    const bodies = lines.map((line, index) => {
+-      const prefix = index === 0 ? this.renderPrefix(safeWidth) : "";
+-      return `${prefix}${this.theme.fg("toolOutput", line)}`;
+-    });
+-    const hiddenText = this.display.truncated || bodies.some((body) => visibleWidth(body) > safeWidth);
+-    const rendered = bodies.map((body, index) => {
+-      const suffix = hiddenText && index === bodies.length - 1 ? " … (Ctrl+O to expand)" : "";
+-      if (!suffix) return truncateToWidth(body, safeWidth, "…");
+-      if (safeWidth >= suffix.length + 20) {
+-        return `${truncateToWidth(body, safeWidth - suffix.length, "…")}${this.theme.fg("muted", suffix)}`;
+-      }
+-      const shortSuffix = " (Ctrl+O)";
+-      if (safeWidth >= shortSuffix.length + 5) {
+-        return `${truncateToWidth(body, safeWidth - shortSuffix.length, "…")}${this.theme.fg("muted", shortSuffix)}`;
+-      }
+-      return truncateToWidth(this.theme.fg("muted", shortSuffix.trim()), safeWidth, "…");
+-    });
+-    this.rendered = { width: safeWidth, lines: rendered };
+-    return rendered;
++    return this.text.render(width);
+   }
+ 
+   invalidate(): void {
+-    this.rendered = null;
+-  }
+-
+-  private renderPrefix(width: number): string {
+-    if (!this.title) return "";
+-    const arrow = " → ";
+-    if (!this.inputPreview) return `${this.theme.fg("toolTitle", this.title)}${arrow}`;
+-
+-    const maxPrefixWidth = Math.max(12, Math.floor(width * 0.55));
+-    const titleWidth = visibleWidth(this.title);
+-    const inputWidth = Math.max(0, maxPrefixWidth - titleWidth - 1);
+-    if (inputWidth <= 3) {
+-      return `${this.theme.fg("toolTitle", truncateToWidth(this.title, maxPrefixWidth, "…"))}${arrow}`;
+-    }
+-
+-    const input = truncateToWidth(this.inputPreview, inputWidth, "…");
+-    return `${this.theme.fg("toolTitle", this.title)} ${this.theme.fg("muted", input)}${arrow}`;
++    this.text.invalidate();
+   }
+ }
+ 
+@@ -211,6 +171,63 @@
+   return typeof value === "object" && value !== null && !Array.isArray(value) && Object.keys(value).length > 0;
+ }
+ 
++const MAX_COMPACT_ARG_VALUE_CHARS = 60;
++const MAX_COMPACT_ARGS_PREVIEW_CHARS = 160;
++const MAX_COMPACT_ARGS_KEYS = 4;
++
++function splitPrefixedName(name: string): { server: string; tool: string } {
++  const separatorIndex = name.indexOf("_");
++  if (separatorIndex === -1) return { server: "", tool: name };
++  return { server: name.slice(0, separatorIndex), tool: name.slice(separatorIndex + 1) };
++}
++
++function formatCompactArgValue(value: unknown): string {
++  if (typeof value === "string") return truncateText(JSON.stringify(value), MAX_COMPACT_ARG_VALUE_CHARS);
++  if (typeof value === "number" || typeof value === "boolean") return truncateText(String(value), MAX_COMPACT_ARG_VALUE_CHARS);
++  try {
++    return truncateText(JSON.stringify(value), MAX_COMPACT_ARG_VALUE_CHARS);
++  } catch {
++    return truncateText(String(value), MAX_COMPACT_ARG_VALUE_CHARS);
++  }
++}
++
++function formatCompactArgsPreview(args: Record<string, unknown> | undefined): string {
++  if (!hasUsefulObjectContent(args)) return "";
++  const keys = Object.keys(args as Record<string, unknown>);
++  const shownKeys = keys.slice(0, MAX_COMPACT_ARGS_KEYS);
++  const parts = shownKeys.map((key) => `${key}: ${formatCompactArgValue((args as Record<string, unknown>)[key])}`);
++  if (keys.length > MAX_COMPACT_ARGS_KEYS) parts.push("…");
++  return truncateText(`(${parts.join(", ")})`, MAX_COMPACT_ARGS_PREVIEW_CHARS);
++}
++
++function resolveCompactArgsObject(args: string | Record<string, unknown> | undefined): Record<string, unknown> | undefined {
++  if (typeof args !== "string") return args;
++  try {
++    const parsed: unknown = JSON.parse(args);
++    return hasUsefulObjectContent(parsed) ? (parsed as Record<string, unknown>) : undefined;
++  } catch {
++    return undefined;
++  }
++}
++
++interface McpCompactCallDisplay {
++  title: string;
++  argsPreview: string;
++}
++
++function formatMcpCompactCallDisplay(server: string, tool: string, args: Record<string, unknown> | undefined): McpCompactCallDisplay {
++  return {
++    title: server ? `${server} - ${tool} (MCP)` : `${tool} (MCP)`,
++    argsPreview: formatCompactArgsPreview(args),
++  };
++}
++
++function formatMcpProxyCompactDisplay(args: McpProxyToolCallInput): McpCompactCallDisplay | undefined {
++  if (!args.tool) return undefined;
++  const { server, tool } = args.server ? { server: args.server, tool: args.tool } : splitPrefixedName(args.tool);
++  return formatMcpCompactCallDisplay(server, tool, resolveCompactArgsObject(args.args));
++}
++
+ export function formatMcpProxyToolCallLines(
+   args: McpProxyToolCallInput,
+   maxInputChars = DEFAULT_MAX_CALL_INPUT_CHARS,
+@@ -292,10 +309,11 @@
+   theme: RenderTheme | undefined,
+   context: McpToolRenderContext | undefined,
+   options: McpToolRenderOptions,
++  compactDisplay?: McpCompactCallDisplay,
+ ) {
+   if (context?.state) {
+-    context.state.compactTitle = lines[0] ?? "mcp";
+-    context.state.compactInputPreview = formatCompactInputPreview(lines);
++    context.state.compactTitle = compactDisplay?.title ?? lines[0] ?? "mcp";
++    context.state.compactInputPreview = compactDisplay?.argsPreview ?? formatCompactInputPreview(lines);
+   }
+   if (shouldUseCompactFinalRender(options, context)) return new EmptyComponent();
+   return renderToolCallLines(lines, theme);
+@@ -306,18 +324,29 @@
+   theme?: RenderTheme,
+   context?: McpToolRenderContext,
+ ) {
+-  return renderToolCall(formatMcpProxyToolCallLines(args), theme, context, resolveMcpToolRenderOptions());
++  return renderToolCall(formatMcpProxyToolCallLines(args), theme, context, resolveMcpToolRenderOptions(), formatMcpProxyCompactDisplay(args));
+ }
+ 
+ export function createMcpProxyToolCallRenderer(options: McpToolRenderOptions) {
+   return (args: McpProxyToolCallInput, theme?: RenderTheme, context?: McpToolRenderContext) => {
+-    return renderToolCall(formatMcpProxyToolCallLines(args), theme, context, options);
++    return renderToolCall(formatMcpProxyToolCallLines(args), theme, context, options, formatMcpProxyCompactDisplay(args));
+   };
+ }
+ 
+-export function createMcpDirectToolCallRenderer(displayName: string, options = resolveMcpToolRenderOptions()) {
++export function createMcpDirectToolCallRenderer(
++  displayName: string,
++  serverName: string,
++  toolName: string,
++  options = resolveMcpToolRenderOptions(),
++) {
+   return (args: Record<string, unknown>, theme?: RenderTheme, context?: McpToolRenderContext) => {
+-    return renderToolCall(formatMcpDirectToolCallLines(displayName, args), theme, context, options);
++    return renderToolCall(
++      formatMcpDirectToolCallLines(displayName, args),
++      theme,
++      context,
++      options,
++      formatMcpCompactCallDisplay(serverName, toolName, hasUsefulObjectContent(args) ? args : undefined),
++    );
+   };
+ }
+ 
+@@ -429,6 +458,73 @@
+   return { lines, truncated: false };
+ }
+ 
++function formatMcpCompactTitleLine(title: string, argsPreview: string, theme: RenderTheme): string {
++  const styledTitle = theme.fg("toolTitle", theme.bold ? theme.bold(title) : title);
++  const styledArgs = argsPreview ? theme.fg("muted", argsPreview) : "";
++  return `${COMPACT_BULLET}${styledTitle}${styledArgs}`;
++}
++
++function formatMcpCompactPartialRow(theme: RenderTheme): string {
++  return theme.fg("muted", `${COMPACT_RESULT_PREFIX}…`);
++}
++
++function formatMcpCompactErrorRow(result: Pick<AgentToolResult<McpToolResultDetails>, "content">, theme: RenderTheme): string {
++  const display = collectCollapsedResultLines(result.content, 1, DEFAULT_MAX_COLLAPSED_CHARS);
++  return theme.fg("error", `${COMPACT_RESULT_PREFIX}✗ ${display.lines[0] ?? ""}`);
++}
++
++function formatMcpCompactExpandedRows(result: Pick<AgentToolResult<McpToolResultDetails>, "content">, theme: RenderTheme): string {
++  const display = formatMcpToolResultLines(result, true);
++  return display.lines.map((line) => `${COMPACT_RESULT_CONTINUATION_PREFIX}${theme.fg("toolOutput", line)}`).join("\n");
++}
++
++function computeHiddenResultLineCount(result: Pick<AgentToolResult<McpToolResultDetails>, "content">, shownLineCount: number): number {
++  const totalLines = result.content.flatMap(blockToLines).length;
++  return Math.max(0, totalLines - shownLineCount);
++}
++
++function formatMcpCompactResultRows(shownLines: string[], hiddenLineCount: number, theme: RenderTheme): string {
++  const bodyLines = shownLines.length > 0 ? shownLines : [""];
++  const rows = bodyLines.map((line, index) => {
++    const prefix = index === 0 ? theme.fg("muted", COMPACT_RESULT_PREFIX) : COMPACT_RESULT_CONTINUATION_PREFIX;
++    return `${prefix}${theme.fg("toolOutput", line)}`;
++  });
++  if (hiddenLineCount > 0) {
++    rows[rows.length - 1] += theme.fg("muted", ` … +${hiddenLineCount} lines (ctrl+o to expand)`);
++  }
++  return rows.join("\n");
++}
++
++function buildCompactMcpToolResultContent(
++  result: AgentToolResult<McpToolResultDetails>,
++  options: ToolRenderResultOptions,
++  theme: RenderTheme,
++  context: McpToolRenderContext | undefined,
++  renderOptions: McpToolRenderOptions,
++): string {
++  const title = context?.state?.compactTitle ?? formatMcpToolResultIdentity(result.details) ?? "";
++  const argsPreview = context?.state?.compactInputPreview ?? "";
++  const titleLine = title ? formatMcpCompactTitleLine(title, argsPreview, theme) : "";
++
++  let resultRow: string;
++  if (options.isPartial) {
++    resultRow = formatMcpCompactPartialRow(theme);
++  } else if (options.expanded) {
++    resultRow = formatMcpCompactExpandedRows(result, theme);
++  } else if (context?.isError === true || Boolean(result.details.error)) {
++    resultRow = formatMcpCompactErrorRow(result, theme);
++  } else {
++    const display = formatMcpToolResultLines(result, false, renderOptions.collapsedResultLines);
++    const shownLines = display.lines.filter((line, index, lines) => {
++      return !(display.truncated && index === lines.length - 1 && line === "…");
++    });
++    const hiddenLineCount = display.truncated ? computeHiddenResultLineCount(result, shownLines.length) : 0;
++    resultRow = formatMcpCompactResultRows(shownLines, hiddenLineCount, theme);
++  }
++
++  return [titleLine, resultRow].filter((line) => line.length > 0).join("\n");
++}
++
+ export function renderMcpToolResult(
+   result: AgentToolResult<McpToolResultDetails>,
+   options: ToolRenderResultOptions,
+@@ -437,19 +533,17 @@
+   renderOptions = resolveMcpToolRenderOptions(),
+ ) {
+   const activeTheme = theme ?? plainTheme;
++
++  if (renderOptions.resultRendering === "compact") {
++    return new CompactMcpToolResult(buildCompactMcpToolResultContent(result, options, activeTheme, context, renderOptions));
++  }
++
+   if (options.isPartial) {
+     return new Text(activeTheme.fg("warning", "Running MCP tool..."), 0, 0);
+   }
+ 
+   const hasErrorDetails = Boolean(result.details.error);
+   const expanded = options.expanded || context?.isError === true || hasErrorDetails;
+-  if (!expanded && renderOptions.resultRendering === "compact") {
+-    const display = formatMcpToolResultLines(result, false, renderOptions.collapsedResultLines);
+-    const title = context?.state?.compactTitle ?? formatMcpToolResultIdentity(result.details) ?? "";
+-    const inputPreview = context?.state?.compactInputPreview ?? "";
+-    return new CompactMcpToolResult(title, inputPreview, display, activeTheme);
+-  }
+-
+   const display = formatMcpToolResultLines(result, expanded, renderOptions.collapsedResultLines);
+   const identity = formatMcpToolResultIdentity(result.details);
+   const output = [
+--- a/index.ts
++++ b/index.ts
+@@ -280,7 +280,7 @@
+         : {}),
+       execute: createDirectToolExecutor(() => state, () => initPromise, spec),
+       renderShell: toolRenderShell,
+-      renderCall: createMcpDirectToolCallRenderer(spec.prefixedName, toolRenderOptions),
++      renderCall: createMcpDirectToolCallRenderer(spec.prefixedName, spec.serverName, spec.originalName, toolRenderOptions),
+       renderResult: renderMcpToolResult,
+     });
+   }
