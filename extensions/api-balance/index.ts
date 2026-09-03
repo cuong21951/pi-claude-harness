@@ -30,6 +30,14 @@ export function balanceText(b: Balance): { text: string; role: "success" | "warn
 }
 
 async function refresh(ctx: ExtensionContext): Promise<void> {
+	try {
+		await refreshInner(ctx);
+	} catch {
+		// stale ctx after newSession/fork/switch/reload; next session_start re-arms with a fresh ctx
+	}
+}
+
+async function refreshInner(ctx: ExtensionContext): Promise<void> {
 	if (!ctx.hasUI) return;
 	for (const [provider, fetchBalance] of Object.entries(PROVIDERS)) {
 		const statusKey = `balance-${provider}`;

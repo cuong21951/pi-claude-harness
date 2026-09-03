@@ -5,7 +5,7 @@
       "name": "openrouter-first",
       "models": [
         "openrouter/z-ai/glm-5.3-flash",
-        "openrouter/deepseek/deepseek-v4-flash"
+        "openrouter/meta/muse-spark-1.3-contributor"
       ]
     }
   ],
