@@ -29,23 +29,21 @@ export default function (pi: ExtensionAPI) {
 	let mode: Mode = "normal";
 	let offerDeclined = false;
 
-	// ponytail: the permission extension reads its config once at load, so a live yolo flip needs a reload.
-	async function apply(target: Mode, ctx: any) {
-		const wasYolo = mode === "yolo";
+	// ponytail: the permission extension re-reads its config at every turn start, so writing the
+	// file is enough; no reload, and reload() only exists on command contexts anyway.
+	function apply(target: Mode, ctx: any) {
 		mode = target;
-		if (ctx.hasUI) ctx.ui.setStatus("modes", BADGE[mode]);
-		const needsReload = writeYolo(mode === "yolo");
-		if (ctx.hasUI) {
-			ctx.ui.notify(
-				mode === "plan"
-					? "Plan mode. Writes are blocked, bash is read-only."
-					: mode === "yolo"
-						? "Yolo mode. Permission prompts are off."
-						: "Normal mode.",
-				"info",
-			);
-		}
-		if (needsReload && (mode === "yolo" || wasYolo)) await ctx.reload();
+		writeYolo(mode === "yolo");
+		if (!ctx.hasUI) return;
+		ctx.ui.setStatus("modes", BADGE[mode]);
+		ctx.ui.notify(
+			mode === "plan"
+				? "Plan mode. Writes are blocked, bash is read-only."
+				: mode === "yolo"
+					? "Yolo mode. Permission prompts are off from your next message."
+					: "Normal mode. Permissions are enforced from your next message.",
+			"info",
+		);
 	}
 
 	pi.on("session_start", async (_event, ctx) => {
@@ -67,7 +65,7 @@ export default function (pi: ExtensionAPI) {
 		if (mode !== "normal" || offerDeclined || !ctx.hasUI) return;
 		if (!wantsPlan(String(event.prompt ?? ""))) return;
 		const yes = await ctx.ui.confirm("Plan mode?", "This reads like a planning request. Switch to plan mode (read-only) first?");
-		if (yes) await apply("plan", ctx);
+		if (yes) apply("plan", ctx);
 		else offerDeclined = true;
 	});
 

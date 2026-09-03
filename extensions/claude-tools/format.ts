@@ -78,7 +78,10 @@ export function summary(tool: string, args: Record<string, unknown>, outcome: To
 			const lines = diffLines(outcome.details);
 			const added = lines.filter((line) => line.startsWith("+")).length;
 			const removed = lines.filter((line) => line.startsWith("-")).length;
-			return `Updated ${shortPath(args.path, home)} with ${plural(added, "addition")} and ${plural(removed, "removal")}`;
+			const path = shortPath(args.path, home);
+			// ponytail: a missing diff is not a zero-change edit; saying so would misreport the tool.
+			if (added === 0 && removed === 0) return `Updated ${path}`;
+			return `Updated ${path} with ${plural(added, "addition")} and ${plural(removed, "removal")}`;
 		}
 		case "grep":
 			return `Found ${plural(lineCount(outcome.text), "line")}`;
@@ -147,7 +150,7 @@ if (process.env.CLAUDE_TOOLS_SELFTEST) {
 		resultText("edit", { path: "x.ts" }, ok("done", { diff }), view(), plain) === "  └ Updated x.ts with 2 additions and 1 removal\n    +1 a\n    -2 b\n     3 c\n    +4 d",
 		"edit summary and diff always shown",
 	);
-	check(resultText("edit", { path: "x.ts" }, ok("done", {}), view(), plain) === "  └ Updated x.ts with 0 additions and 0 removals", "edit without diff details");
+	check(resultText("edit", { path: "x.ts" }, ok("done", {}), view(), plain) === "  └ Updated x.ts", "edit without diff details omits counts");
 	const longDiff = Array.from({ length: 25 }, (_, i) => `+${i} x`).join("\n");
 	check(resultText("edit", { path: "x" }, ok("", { diff: longDiff }), view(), plain).startsWith("  └ Updated x with 25 additions and 0 removals (ctrl+o to expand)"), "long diff collapses with hint");
 	check(resultText("read", {}, { text: "ENOENT\nmore", isError: true, details: undefined }, view(), plain) === "  └ ✗ ENOENT", "error shows first line");

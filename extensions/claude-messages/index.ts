@@ -14,7 +14,8 @@ export function bulletize(markdown: string): string {
 export default function (pi: ExtensionAPI) {
 	pi.registerMarkdownTransformer((markdown, { messageType }) => (messageType === "assistant" ? bulletize(markdown) : markdown));
 	pi.on("session_start", (_event, ctx) => {
-		if (ctx.hasUI) ctx.ui.setHiddenThinkingLabel("✻ Thought");
+		// ponytail: Claude shows nothing where a hidden thinking block was; an empty label drops the line.
+		if (ctx.hasUI) ctx.ui.setHiddenThinkingLabel("");
 	});
 }
 
