@@ -14,7 +14,7 @@ A [pi](https://pi.dev) coding-agent setup that looks and behaves like Claude Cod
 | `claude-messages` | `● ` before assistant paragraphs, `✻ Thinking…` label |
 | `claude-working` | Claude's sparkle spinner `· ✢ * ✶ ✻ ✽` with a shimmer over the verb, elapsed time, tokens, `esc to interrupt` |
 | `claude-footer` | One muted line: extension statuses · model · think level · ctx % · $cost · git branch |
-| `claude-input` | Rounded `╭─╮ │ > … │ ╰─╯` input box |
+| `claude-input` | Flat rules above and below with a `> ` prompt, exactly like Claude Code 2.1.259 |
 | `claude-images` | `alt+v` pastes a clipboard image as an `[Image #N]` chip (Windows only; other platforms keep pi's `ctrl+v`) |
 | `claude-mcp-render` | Drops the schema dump MCP tools append on validation errors |
 | `themes/claude-dark` | Dark theme, Claude orange accents, daltonized diff colours |
