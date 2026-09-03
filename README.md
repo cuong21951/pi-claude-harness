@@ -15,6 +15,7 @@ A [pi](https://pi.dev) coding-agent setup that looks and behaves like Claude Cod
 | `claude-working` | Claude's sparkle spinner `· ✢ * ✶ ✻ ✽` with a shimmer over the verb, elapsed time, tokens, `esc to interrupt` |
 | `claude-footer` | One muted line: extension statuses · model · think level · ctx % · $cost · git branch |
 | `claude-input` | Flat rules above and below with a `> ` prompt, exactly like Claude Code 2.1.259 |
+| `claude-bottom-input` | In `regular` TUI mode, pads above the editor so the prompt and footer sit on the bottom rows like fullscreen (0 rows once the transcript overflows; never triggers a full redraw) |
 | `claude-images` | `alt+v` pastes a clipboard image as an `[Image #N]` chip (Windows only; other platforms keep pi's `ctrl+v`) |
 | `claude-mcp-render` | Drops the schema dump MCP tools append on validation errors |
 | `themes/claude-dark` | Dark theme, Claude orange accents, daltonized diff colours |
@@ -53,7 +54,7 @@ Set `PI_CODING_AGENT_DIR` to install somewhere other than `~/.pi/agent`.
 
 ## Notes
 
-- `tuiMode: fullscreen` (alt screen, differential repaint, cat always animated) is the default. `regular` behaves more like Claude Code (terminal owns scrollback and the mouse wheel), but there the cat only animates while the header is still on screen: once the transcript is taller than the terminal it freezes, because pi-tui answers any change above the viewport with a full redraw.
+- `tuiMode: regular` is the default: the terminal owns scrollback and the mouse wheel like Claude Code, and `claude-bottom-input` keeps the prompt on the bottom rows. `fullscreen` (alt screen) always animates the cat, but under multiplexers that do not forward mouse events (herdr on Windows) the wheel becomes Up/Down there. In `regular` the cat only animates while the header is still on screen, because pi-tui answers any change above the viewport with a full redraw. Wrap `pi` in a shell function that prints `ESC[2J ESC[3J ESC[H` first: pi does not clear the screen at startup, so relaunches stack the previous session in the pane.
 - The cheap-model guard exists because pi picks the first model of the provider list when `defaultModel` is unset, and on OpenRouter that is a frontier model. Keep `defaultModel` set.
 - `rtk-bash` and `api-balance` are harmless without rtk / without keys.
 

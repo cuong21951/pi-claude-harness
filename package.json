@@ -15,6 +15,7 @@
       "./extensions/claude-mcp-render",
       "./extensions/claude-footer",
       "./extensions/claude-input",
+      "./extensions/claude-bottom-input",
       "./extensions/claude-images",
       "./extensions/cheap-models",
       "./extensions/deepseek-guards",

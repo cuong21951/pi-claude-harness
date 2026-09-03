@@ -22,7 +22,7 @@
   "compaction": { "enabled": true, "reserveTokens": 200000, "keepRecentTokens": 80000 },
   "retry": { "enabled": true, "maxRetries": 3, "provider": { "maxRetries": 0 } },
   "theme": "claude-dark",
-  "tuiMode": "fullscreen",
+  "tuiMode": "regular",
   "hideThinkingBlock": true,
   "quietStartup": true,
   "showHardwareCursor": true,
