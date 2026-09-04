@@ -23,8 +23,8 @@ export type FooterFacts = {
 };
 
 function contextRole(percent: number | null): string {
-	if (percent === null) return "dim";
-	return percent > 90 ? "error" : percent > 70 ? "warning" : "dim";
+	if (percent === null) return "muted";
+	return percent > 90 ? "error" : percent > 70 ? "warning" : "success";
 }
 
 function thinkingRole(level: string): string {
@@ -64,13 +64,13 @@ export function composeFooter(f: FooterFacts, paint: Paint, maxWidth?: number): 
 
 // ponytail: Claude's second row is the mode on the left and "? for shortcuts" on the right.
 export function composeModeRow(mode: string, paint: Paint, width: number): string {
-	const hint = paint("dim", SHORTCUTS_HINT);
+	const hint = paint("muted", SHORTCUTS_HINT);
 	const gap = width - plainWidth(mode) - SHORTCUTS_HINT.length;
 	return gap < 1 ? mode : `${mode}${" ".repeat(gap)}${hint}`;
 }
 
 export function badge(status: string, paint: Paint): string {
-	return isPonytail(status) ? paint("warning", "[PONYTAIL]") : status.trim();
+	return isPonytail(status) ? paint("success", "[PONYTAIL]") : status.trim();
 }
 
 export function visibleStatuses(statuses: Map<string, string>, paint: Paint): string[] {
@@ -139,6 +139,7 @@ if (process.env.CLAUDE_FOOTER_SELFTEST) {
 	check(coloured.includes("<thinkingHigh>think high</thinkingHigh>"), "think level uses its theme role");
 	check(coloured.includes("<error>ctx 95%</error>"), "context above 90% is error");
 	check(coloured.includes("<success>main</success>") && coloured.includes("<dim> · </dim>"), "branch success, separators dim");
+	check(composeFooter(base, tagged).includes("<success>ctx 22%</success>"), "healthy context is green like Claude's status line");
 	check(composeFooter(base, plain) === composeFooter(base, plain, 1000), "no overflow = unchanged");
 	const crowded = { ...base, statuses: ["[PONYTAIL]", "deepseek $24.57", "openrouter $20.38", "MCP 1/11"], branch: "master", model: "DeepSeek V4 Flash Vision Exp" };
 	const at120 = composeFooter(crowded, plain, 120);
@@ -148,7 +149,7 @@ if (process.env.CLAUDE_FOOTER_SELFTEST) {
 	check(narrow === "[PONYTAIL] · GLM 5.3 Flash", "overflow drops whole parts");
 	check(!/\x1b\[[0-9;]*$/.test(composeFooter(base, tagged, 30)), "no cut escape sequence at line end");
 	check(composeFooter({ ...base, statuses: ["x".repeat(60)] }, plain, 30) === "GLM 5.3 Flash · think high", "a status too wide to fit is dropped, not sliced");
-	check(badge("\x1b[32m● ponytail: ⚡ FULL\x1b[0m", tagged) === "<warning>[PONYTAIL]</warning>", "ponytail status becomes a warning-coloured badge");
+	check(badge("\x1b[32m● ponytail: ⚡ FULL\x1b[0m", tagged) === "<success>[PONYTAIL]</success>", "ponytail status becomes a green badge like Claude's status line");
 	check(badge("\x1b[2mMCP: 3 connected\x1b[0m", tagged) === "\x1b[2mMCP: 3 connected\x1b[0m", "other statuses keep their own colours");
 	const statuses = new Map([
 		["modes", "⏵⏵ accept edits on"],

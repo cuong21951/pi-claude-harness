@@ -1,6 +1,7 @@
 import { createBashTool, type BashToolDetails, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
-import { callLine, resultLines } from "./render.ts";
+import { truncateToWidth } from "@earendil-works/pi-tui";
+import { blinkOn, dynamic, failed, finished } from "../claude-tools/rows.ts";
+import { commandLine, doneLine, resultLines, runningLine } from "./render.ts";
 
 // ponytail: map is only a fallback when the model omits `description`.
 // Claude's real mechanism is a model-supplied `description` field per bash call.
@@ -82,22 +83,28 @@ export default function (pi: ExtensionAPI) {
 			return originalBash.execute(toolCallId, params, signal, onUpdate);
 		},
 
-		renderCall(args, theme) {
+		renderCall(args, theme, context) {
 			const intent = (args as any).description?.trim() || describe((args as any).command);
-			return new Text(callLine(intent, theme), 0, 0);
+			return dynamic((width) => {
+				const id = (context as { toolCallId?: string })?.toolCallId ?? "";
+				return finished.has(id) ? [] : [truncateToWidth(runningLine(intent, blinkOn(), theme), width)];
+			});
 		},
 
-		renderResult(result, { expanded, isPartial }, theme) {
-			if (isPartial) return new Text(theme.fg("toolTitle", "  └ ") + theme.fg("toolTitle", "Running…"), 0, 0);
+		renderResult(result, { expanded, isPartial }, theme, context) {
+			const args = (context as { args?: { command?: unknown; description?: unknown } })?.args ?? {};
+			const command = String(args.command ?? "");
+			const intent = String(args.description ?? "").trim() || describe(command);
+			if (isPartial) return dynamic((width) => [truncateToWidth(commandLine(command, theme), width)]);
 
 			const details = result.details as BashToolDetails | undefined;
 			const content = result.content[0];
 			const output = content?.type === "text" ? content.text : "";
 			const exitMatch = output.match(/exit(?:ed with)? code:? (\d+)/);
-			const exitCode = exitMatch ? parseInt(exitMatch[1], 10) : null;
-			const [head, ...rest] = resultLines(output, exitCode, expanded, details?.truncation?.truncated === true);
-			const painted = theme.fg(exitCode && exitCode !== 0 ? "error" : "toolTitle", head);
-			return new Text([painted, ...rest.map((line) => theme.fg("toolOutput", line))].join("\n"), 0, 0);
+			const id = (context as { toolCallId?: string })?.toolCallId ?? "";
+			const exitCode = exitMatch ? parseInt(exitMatch[1], 10) : failed.has(id) ? 1 : null;
+			const lines = resultLines(output, exitCode, expanded, details?.truncation?.truncated === true, theme);
+			return dynamic((width) => [doneLine(intent, theme), ...(lines ?? [])].map((line) => truncateToWidth(line, width)));
 		},
 	});
 }

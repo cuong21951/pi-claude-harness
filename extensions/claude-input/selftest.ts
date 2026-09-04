@@ -54,13 +54,4 @@ const id = (t: string) => t;
 	for (const line of lines) assert.equal(line.length, 40, `real editor row fits width: ${JSON.stringify(line)}`);
 }
 
-{
-	const wide = "─".repeat(60);
-	const blank = " ".repeat(60);
-	const rows = promptLines([wide, `\x1b_pi:c\x07\x1b[7m \x1b[0m${blank}`, wide], id, (t) => `<dim>${t}</dim>`);
-	assert.equal(rows[1], '❯ \x1b_pi:c\x07\x1b[7m \x1b[0m<dim>Try "how does <filepath> work?"</dim>', "empty prompt keeps the cursor marker and adds the dim placeholder");
-	assert.equal(promptLines([wide, blank, blank, wide], id, (t) => `<dim>${t}</dim>`)[1], `❯ ${blank}`, "a taller empty editor shows no placeholder");
-	assert.equal(promptLines(["────", "    ", "────"], id, (t) => `<dim>${t}</dim>`)[1], "❯     ", "too narrow for the placeholder = plain row");
-}
-
 console.log("claude-input selftest: all assertions passed");

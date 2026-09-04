@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { dynamic } from "../claude-tools/rows.ts";
 
 const VERBS = [
 	"Accomplishing", "Actualizing", "Baking", "Brewing", "Calculating", "Cerebrating", "Churning", "Coalescing",
@@ -24,12 +25,14 @@ const TIMER_ALWAYS_AFTER_MS = 16_000;
 const THOUGHT_FOR_MS = 2000;
 
 type Rgb = { r: number; g: number; b: number };
-const CLAUDE: Rgb = { r: 215, g: 119, b: 87 };
-const CLAUDE_SHIMMER: Rgb = { r: 235, g: 159, b: 127 };
+// ponytail: dark-daltonized values, measured on screen: glyph and verb ffaf5f, shimmer ffd787.
+const CLAUDE: Rgb = { r: 255, g: 175, b: 95 };
+const CLAUDE_SHIMMER: Rgb = { r: 255, g: 215, b: 135 };
 const WARNING: Rgb = { r: 255, g: 193, b: 7 };
 const STALL_RED: Rgb = { r: 171, g: 43, b: 63 };
-const GREY: Rgb = { r: 153, g: 153, b: 153 };
-const GREY_BRIGHT: Rgb = { r: 185, g: 185, b: 185 };
+const GREY: Rgb = { r: 158, g: 158, b: 158 };
+const GREY_BRIGHT: Rgb = { r: 178, g: 178, b: 178 };
+const STATUS_GREY: Rgb = { r: 148, g: 148, b: 148 };
 
 export type Mode = "requesting" | "thinking" | "text" | "tool-use";
 
@@ -60,8 +63,6 @@ const fg = (c: Rgb) => `\x1b[38;2;${c.r};${c.g};${c.b}m`;
 const RESET_FG = "\x1b[39m";
 const BOLD = "\x1b[1m";
 const UNBOLD = "\x1b[22m";
-const DIM = "\x1b[2m";
-const UNDIM = "\x1b[22m";
 
 export function frameIndex(elapsedMs: number): number {
 	return Math.round(easeCos(elapsedMs, FRAME_PERIOD_MS) * (FRAMES.length - 1));
@@ -142,7 +143,19 @@ export function statusText(s: SpinnerState): string {
 	} else {
 		parts.push("esc to interrupt");
 	}
-	return `${DIM}(${parts.join(" · ")})${UNDIM}`;
+	return `${fg(STATUS_GREY)}(${parts.join(" · ")})${RESET_FG}`;
+}
+
+const PAST: Record<string, string> = { Thinking: "Thought", Spinning: "Spun", Shimmying: "Shimmied" };
+
+// ponytail: Claude ends a turn with "✻ Churned for 13s · done 12:58 AM" in grey; the verb is the spinner's.
+export function pastTense(verb: string): string {
+	return PAST[verb] ?? verb.replace(/ing$/, "ed");
+}
+
+export function doneLine(verb: string, ms: number, at: Date): string {
+	const time = at.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+	return `${fg(STATUS_GREY)}✻ ${pastTense(verb)} for ${elapsed(ms)} · done ${time}${RESET_FG}`;
 }
 
 export function line(verb: string, s: SpinnerState): string {
@@ -245,10 +258,17 @@ export default function (pi: ExtensionAPI) {
 		}
 	});
 
+	pi.registerEntryRenderer("claude-working-done", (entry, _options, theme) => {
+		const data = entry.data as { verb: string; ms: number; at: number };
+		return dynamic(() => [doneLine(data.verb, data.ms, new Date(data.at))]);
+	});
+
 	pi.on("agent_end", (_event, ctx) => {
 		clearInterval(timer);
 		timer = undefined;
-		if (ctx.hasUI) ctx.ui.setWorkingMessage();
+		if (!ctx.hasUI) return;
+		ctx.ui.setWorkingMessage();
+		pi.appendEntry("claude-working-done", { verb, ms: Date.now() - started, at: Date.now() });
 	});
 }
 
@@ -276,6 +296,8 @@ if (process.env.CLAUDE_WORKING_SELFTEST) {
 	check(visible(statusText({ ...base, elapsedMs: 3000 })) === "(esc to interrupt)", "timer hidden before 16 s with no tokens");
 	check(visible(statusText({ ...base, elapsedMs: 3000, thoughtForMs: 4200 })) === "(thought for 4s)", "thought-for shown after thinking ends");
 	check(elapsed(65000) === "1m 5s" && tokens(14500) === "14.5k", "formatting");
+	check(pastTense("Churning") === "Churned" && pastTense("Baking") === "Baked" && pastTense("Thinking") === "Thought" && pastTense("Shimmying") === "Shimmied", "past tense of the spinner verb");
+	check(visible(doneLine("Churning", 13_400, new Date(2026, 8, 5, 0, 58))) === "✻ Churned for 13s · done 12:58 AM", "end-of-turn line matches Claude");
 	check(pickVerb("Swirling") !== "Swirling", "verb changes between turns");
 	console.log(line("Vibing", { ...base, elapsedMs: 225_000, tokens: 5600 }));
 }

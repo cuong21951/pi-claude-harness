@@ -49,13 +49,13 @@ What the harness matches today, and what it does not, so the next pass starts fr
 
 **Matched**
 
-- Row shape everywhere: `● Label(args)` on the call line, `  └ summary` on the result, `ctrl+o` to expand. File tools, bash, skills, MCP and web search all agree.
-- Colours measured, not guessed. Claude's palette was read out of its own binary and the rendered rows were sampled pixel by pixel from a side-by-side capture. The theme targets `dark-daltonized`, which is what a colour-blind-safe Claude install uses.
-- The dot carries meaning: blue for a tool, purple for a skill, red only on failure.
+- Colours measured on screen, not guessed: Claude Code 2.1.260 in `dark-daltonized` was driven in a pseudo-terminal and every run of characters read back with its colour. Tool dot `5fafff`, grey `949494`, separators `585858`, model `87afd7`, green `87af87`, spinner `ffaf5f` with `ffd787` shimmer, diff backgrounds `5f0000` / `00005f`, user message `3a3a3a`. The theme carries these values.
+- Tool rows behave like Claude's. A running tool is a blinking grey dot plus "Reading a.txt" or the bash description, with `⎿ $ cmd` under it. A finished read-only tool (read, search, list, bash) collapses to one grey line: `Read a.txt`, `Ran Check git status`; ctrl+o brings the elbow and the output back, and a failed command keeps its red row. Write and Update keep the blue dot, a grey `⎿`, bold counts, and show the written lines or the diff with line numbers and Claude's backgrounds. Claude merges consecutive read-only tools into "Read 1 file, ran 2 shell commands"; pi keeps one block per tool, so it is one grey line per tool.
+- A turn ends with Claude's grey `✻ Churned for 13s · done 12:58 AM`, the spinner verb in the past tense.
 - No coloured block behind a tool row, because Claude never draws one.
 - Modes on `shift+tab`, with the plan-mode offer when you ask for a plan, and the "Plan ready. Proceed?" question (accept edits / bypass / keep planning) when a plan-mode turn ends. Accepting continues the same conversation.
 - Footer rows: line one is `[PONYTAIL] · model · think · ctx · $cost · branch · statuses`, line two is Claude's mode row (`⏵⏵ accept edits on`, `⏸ plan mode on`, `⏵⏵ bypass permissions on`) with `? for shortcuts` on the right. Overflow drops the trailing statuses first, so ctx and cost survive at 120 columns.
-- Prompt: `❯ ` and the dim `Try "how does <filepath> work?"` placeholder, `● high · /effort` right-aligned above it (`/effort` sets the thinking level), `?` card on an empty prompt.
+- Prompt: `❯ `, `● high · /effort` right-aligned above it (`/effort` sets the thinking level), `?` card on an empty prompt. Claude's placeholder tip was dropped on request.
 - Keys: double-tap esc clears the prompt, ctrl+s stashes it, ctrl+shift+t is the thinking toggle. `\` + enter for a newline is not possible (pi has no key chords), use shift+enter.
 - Startup: set `PI_SKIP_VERSION_CHECK=1` in your `pi` wrapper and the update box is gone. The ponytail and MCP notices are printed by their packages and stay.
 - Done notification via `pi-notify`; `herdr-state` reports the session and working/idle state to the herdr multiplexer like Claude Code's hook (no-op outside herdr).
@@ -70,7 +70,8 @@ What the harness matches today, and what it does not, so the next pass starts fr
 - Rewind (esc esc restoring files) does not exist; `/tree` and `/fork` restore the conversation only.
 - `auto` judges a bash command by an allowlist that looks through `rtk`, `rtk proxy`, `command`, `time` and `nice`. Anything outside the allowlist raises a confirm, so an unusual but harmless command will still ask.
 - Assistant body text is the terminal's default foreground, not `#ffffff`. pi's markdown renderer paints headings, links and code from the theme but leaves paragraph text uncoloured, and the theme has no key for it, so matching Claude's pure white would take a patch to pi itself.
-- The header cat keeps its own orange. The `warning` role was deliberately left on `#d97757` so the cat does not change.
+- The header cat keeps its own orange (`d97757`); Claude's logo is `d78787`. The `warning` role was deliberately left on the cat's colour.
+- Hidden thinking blocks between tool calls leave pi's own blank lines (up to three); the tool rows themselves add none.
 
 ## Testing
 

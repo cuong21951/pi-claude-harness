@@ -27,7 +27,7 @@ function writeYolo(on: boolean): void {
 // ponytail: the status text is already painted here so claude-footer can print it as-is on its own row.
 function modeRow(mode: Mode, ctx: any): string {
 	const line = MODE_LINE[mode];
-	return ctx.ui.theme.fg(line.role, line.text) + ctx.ui.theme.fg("dim", CYCLE_HINT);
+	return ctx.ui.theme.fg(line.role, line.text) + ctx.ui.theme.fg("muted", CYCLE_HINT);
 }
 
 export default function (pi: ExtensionAPI) {
