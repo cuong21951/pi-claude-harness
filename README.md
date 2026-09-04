@@ -18,7 +18,11 @@ A [pi](https://pi.dev) coding-agent setup that looks and behaves like Claude Cod
 | `claude-bottom-input` | In `regular` TUI mode, pads above the editor so the prompt and footer sit on the bottom rows like fullscreen (0 rows once the transcript overflows; never triggers a full redraw) |
 | `claude-images` | `alt+v` pastes a clipboard image as an `[Image #N]` chip (Windows only; other platforms keep pi's `ctrl+v`) |
 | `claude-mcp-render` | Drops the schema dump MCP tools append on validation errors |
-| `claude-modes` | `shift+tab` cycles plan / auto / yolo with a `[PLAN]` or `[AUTO]` badge. Plan blocks writes and allows only read-only bash; auto applies edits without asking but confirms a side-effecting bash; yolo asks nothing. It also offers plan mode when a message reads like a planning request |
+| `claude-modes` | `shift+tab` cycles plan / accept edits / bypass, shown on Claude's mode row in the footer. Plan blocks writes and allows only read-only bash; accept edits applies edits without asking but confirms a side-effecting bash; bypass asks nothing. It offers plan mode when a message reads like a planning request, and asks "Plan ready. Proceed?" when a plan-mode turn ends |
+| `claude-effort` | `● high · /effort` right-aligned above the prompt; `/effort [level]` sets the thinking level |
+| `claude-help` | `?` on an empty prompt toggles the shortcut card, any key hides it |
+| `claude-keys` | Double-tap esc clears the prompt, `ctrl+s` stashes and restores it |
+| `herdr-state` | Reports session and working/idle state to the herdr multiplexer (`HERDR_ENV=1` only) |
 | `themes/claude-dark` | Palette taken from Claude Code's own `dark-daltonized` theme: white text, `#3399ff` tool dot, `#af87ff` skill dot, `#ff6666` error, blue/red diffs, tool backgrounds painted out so no row sits in a coloured box |
 
 **Harness**
@@ -49,7 +53,12 @@ What the harness matches today, and what it does not, so the next pass starts fr
 - Colours measured, not guessed. Claude's palette was read out of its own binary and the rendered rows were sampled pixel by pixel from a side-by-side capture. The theme targets `dark-daltonized`, which is what a colour-blind-safe Claude install uses.
 - The dot carries meaning: blue for a tool, purple for a skill, red only on failure.
 - No coloured block behind a tool row, because Claude never draws one.
-- Modes on `shift+tab`, with the plan-mode offer when you ask for a plan.
+- Modes on `shift+tab`, with the plan-mode offer when you ask for a plan, and the "Plan ready. Proceed?" question (accept edits / bypass / keep planning) when a plan-mode turn ends. Accepting continues the same conversation.
+- Footer rows: line one is `[PONYTAIL] · model · think · ctx · $cost · branch · statuses`, line two is Claude's mode row (`⏵⏵ accept edits on`, `⏸ plan mode on`, `⏵⏵ bypass permissions on`) with `? for shortcuts` on the right. Overflow drops the trailing statuses first, so ctx and cost survive at 120 columns.
+- Prompt: `❯ ` and the dim `Try "how does <filepath> work?"` placeholder, `● high · /effort` right-aligned above it (`/effort` sets the thinking level), `?` card on an empty prompt.
+- Keys: double-tap esc clears the prompt, ctrl+s stashes it, ctrl+shift+t is the thinking toggle. `\` + enter for a newline is not possible (pi has no key chords), use shift+enter.
+- Startup: set `PI_SKIP_VERSION_CHECK=1` in your `pi` wrapper and the update box is gone. The ponytail and MCP notices are printed by their packages and stay.
+- Done notification via `pi-notify`; `herdr-state` reports the session and working/idle state to the herdr multiplexer like Claude Code's hook (no-op outside herdr).
 - Subagent progress: the live widget (spinner per agent, tick or cross when it lands) and the fleet list are both on.
 
 **Not matched yet**
@@ -57,7 +66,8 @@ What the harness matches today, and what it does not, so the next pass starts fr
 - Markdown inside messages. Link, inline-code and heading colours are still pi's own; Claude's were never measured, so they were left alone rather than guessed.
 - `auto` is enforced by this harness, not by the permission extension, which exposes no runtime API for a narrower auto-approve. If your own permission policy also asks for bash, you will see two prompts.
 - Yolo takes effect from your next message, not mid-turn, because the permission extension re-reads its config at the start of each turn.
-- Plan mode has two owners. `claude-modes` enforces it, while pi's bundled `plan-mode` example still ships its own `/plan` and `/todos` on `ctrl+alt+p`.
+- Only the bypass colour of the mode row was measured (256-colour 210). Plan and accept edits use the nearest theme roles.
+- Rewind (esc esc restoring files) does not exist; `/tree` and `/fork` restore the conversation only.
 - `auto` judges a bash command by an allowlist that looks through `rtk`, `rtk proxy`, `command`, `time` and `nice`. Anything outside the allowlist raises a confirm, so an unusual but harmless command will still ask.
 - Assistant body text is the terminal's default foreground, not `#ffffff`. pi's markdown renderer paints headings, links and code from the theme but leaves paragraph text uncoloured, and the theme has no key for it, so matching Claude's pure white would take a patch to pi itself.
 - The header cat keeps its own orange. The `warning` role was deliberately left on `#d97757` so the cat does not change.

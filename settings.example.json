@@ -17,7 +17,8 @@
     "npm:pi-worktree",
     "npm:@tintinweb/pi-subagents",
     "npm:@gotgenes/pi-permission-system",
-    "npm:pi-auto-fallback"
+    "npm:pi-auto-fallback",
+    "npm:pi-notify"
   ],
   "compaction": { "enabled": true, "reserveTokens": 200000, "keepRecentTokens": 80000 },
   "retry": { "enabled": true, "maxRetries": 3, "provider": { "maxRetries": 0 } },

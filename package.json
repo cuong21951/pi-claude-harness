@@ -21,7 +21,12 @@
       "./extensions/deepseek-guards",
       "./extensions/no-code-comments",
       "./extensions/rtk-bash",
-      "./extensions/api-balance"
+      "./extensions/api-balance",
+      "./extensions/claude-modes",
+      "./extensions/claude-effort",
+      "./extensions/claude-help",
+      "./extensions/claude-keys",
+      "./extensions/herdr-state"
     ],
     "themes": [
       "./themes"

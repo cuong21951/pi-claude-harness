@@ -1,18 +1,30 @@
 export const MODES = ["plan", "auto", "yolo"] as const;
 export type Mode = (typeof MODES)[number];
 
-export const BADGE: Record<Mode, string> = {
-	plan: "[PLAN]",
-	auto: "[AUTO]",
-	// ponytail: the permission extension already badges yolo; a second one would just repeat it.
-	yolo: "",
+// ponytail: Claude Code's mode row, verbatim: "⏵⏵ accept edits on", "⏸ plan mode on",
+// "⏵⏵ bypass permissions on", each followed by a dim "(shift+tab to cycle)". Only the bypass colour
+// (256-colour 210) was measured; plan and accept edits use the nearest theme roles.
+export const MODE_LINE: Record<Mode, { text: string; role: string }> = {
+	plan: { text: "⏸ plan mode on", role: "success" },
+	auto: { text: "⏵⏵ accept edits on", role: "accent" },
+	yolo: { text: "⏵⏵ bypass permissions on", role: "error" },
 };
+
+export const CYCLE_HINT = " (shift+tab to cycle)";
 
 export const NOTICE: Record<Mode, string> = {
 	plan: "Plan mode. Writes are blocked, bash is read-only.",
-	auto: "Auto mode. Edits apply without asking, bash asks first.",
-	yolo: "Yolo mode. Nothing asks.",
+	auto: "Accept edits. Edits apply without asking, bash asks first.",
+	yolo: "Bypass permissions. Nothing asks.",
 };
+
+export const PROCEED_CHOICES = ["Yes, and accept edits", "Yes, and bypass permissions", "No, keep planning"] as const;
+
+export function proceedMode(choice: string | undefined): Mode | undefined {
+	if (choice === PROCEED_CHOICES[0]) return "auto";
+	if (choice === PROCEED_CHOICES[1]) return "yolo";
+	return undefined;
+}
 
 export function nextMode(mode: Mode): Mode {
 	return MODES[(MODES.indexOf(mode) + 1) % MODES.length];
@@ -106,7 +118,9 @@ if (process.env.CLAUDE_MODES_SELFTEST) {
 	check(gate("yolo", "write", "").action === "allow", "yolo allows writes");
 	check(gate("yolo", "bash", "rm -rf x").action === "allow", "yolo allows anything");
 
-	check(BADGE.plan === "[PLAN]" && BADGE.auto === "[AUTO]" && BADGE.yolo === "", "badges");
+	check(MODE_LINE.yolo.text === "⏵⏵ bypass permissions on" && MODE_LINE.plan.text === "⏸ plan mode on" && MODE_LINE.auto.text === "⏵⏵ accept edits on", "mode rows are Claude's");
 	check(NOTICE.auto.includes("bash asks"), "auto notice explains itself");
+	check(proceedMode(PROCEED_CHOICES[0]) === "auto" && proceedMode(PROCEED_CHOICES[1]) === "yolo", "accepting a plan picks the mode");
+	check(proceedMode(PROCEED_CHOICES[2]) === undefined && proceedMode(undefined) === undefined, "keep planning or escape stays in plan");
 	console.log("\nAll claude-modes checks passed.");
 }

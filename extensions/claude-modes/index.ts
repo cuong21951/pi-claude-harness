@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { BADGE, gate, type Mode, NOTICE, nextMode, wantsPlan } from "./modes.ts";
+import { CYCLE_HINT, gate, MODE_LINE, type Mode, NOTICE, nextMode, PROCEED_CHOICES, proceedMode, wantsPlan } from "./modes.ts";
 
 const PERMISSION_CONFIG =
 	process.env.CLAUDE_MODES_PERMISSION_CONFIG ?? join(getAgentDir(), "extensions", "pi-permission-system", "config.json");
@@ -24,6 +24,12 @@ function writeYolo(on: boolean): void {
 	}
 }
 
+// ponytail: the status text is already painted here so claude-footer can print it as-is on its own row.
+function modeRow(mode: Mode, ctx: any): string {
+	const line = MODE_LINE[mode];
+	return ctx.ui.theme.fg(line.role, line.text) + ctx.ui.theme.fg("dim", CYCLE_HINT);
+}
+
 export default function (pi: ExtensionAPI) {
 	let mode: Mode = "auto";
 	let offerDeclined = false;
@@ -34,13 +40,13 @@ export default function (pi: ExtensionAPI) {
 		mode = target;
 		writeYolo(mode === "yolo");
 		if (!ctx.hasUI) return;
-		ctx.ui.setStatus("modes", BADGE[mode]);
+		ctx.ui.setStatus("modes", modeRow(mode, ctx));
 		ctx.ui.notify(NOTICE[mode], "info");
 	}
 
 	pi.on("session_start", async (_event, ctx) => {
 		mode = readYolo() ? "yolo" : "auto";
-		if (ctx.hasUI) ctx.ui.setStatus("modes", BADGE[mode]);
+		if (ctx.hasUI) ctx.ui.setStatus("modes", modeRow(mode, ctx));
 	});
 
 	pi.registerShortcut("shift+tab", {
@@ -59,6 +65,22 @@ export default function (pi: ExtensionAPI) {
 		const yes = await ctx.ui.confirm("Plan mode?", "This reads like a planning request. Switch to plan mode (read-only) first?");
 		if (yes) apply("plan", ctx);
 		else offerDeclined = true;
+	});
+
+	// ponytail: Claude Code's ExitPlanMode question, asked when a plan-mode turn ends. Accepting switches
+	// the mode and continues the same conversation, so the plan on screen is the one that gets built.
+	// It is asked off the event so the other agent_end handlers (the spinner) finish first.
+	pi.on("agent_end", (event, ctx) => {
+		if (mode !== "plan" || !ctx.hasUI || (event.messages?.length ?? 0) === 0) return;
+		setImmediate(async () => {
+			const target = proceedMode(await ctx.ui.select("Plan ready. Proceed?", [...PROCEED_CHOICES]));
+			if (!target) return;
+			apply(target, ctx);
+			pi.sendMessage(
+				{ customType: "claude-modes-proceed", content: "The plan above is accepted. Implement it now.", display: false },
+				{ triggerTurn: true, deliverAs: "followUp" },
+			);
+		});
 	});
 
 	pi.on("tool_call", async (event, ctx) => {

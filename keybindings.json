@@ -2,5 +2,8 @@
   "tui.editor.historyPrevious": "ctrl+p",
   "tui.editor.historyNext": "ctrl+n",
   "app.clipboard.pasteImage": "ctrl+alt+v",
-  "app.thinking.cycle": "ctrl+alt+t"
+  "app.thinking.cycle": "ctrl+alt+t",
+  "app.thinking.toggle": "ctrl+shift+t",
+  "app.models.save": "ctrl+alt+s",
+  "app.session.toggleSort": "ctrl+alt+s"
 }
