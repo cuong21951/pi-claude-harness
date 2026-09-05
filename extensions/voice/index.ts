@@ -448,6 +448,7 @@ export class VoiceRecorder {
 	private hintTimer?: ReturnType<typeof setTimeout>;
 	private finishing = false;
 	private ffmpegOk = false;
+	private unavailableReason: string | null = null;
 	private devices: string[] = [];
 	private transcriber: Transcriber;
 
@@ -458,18 +459,29 @@ export class VoiceRecorder {
 		this.transcriber = new Transcriber(config, dir);
 	}
 
+	// A machine without the pieces stays quiet, like Claude: /voice explains, nothing else does.
 	async init(): Promise<void> {
+		if (process.platform !== "win32") {
+			this.unavailableReason = "Voice mode is Windows-only for now (ffmpeg dshow capture).";
+			return;
+		}
 		const version = await runCapture("ffmpeg", ["-version"], 5000);
 		this.ffmpegOk = version.stdout.startsWith("ffmpeg version");
 		if (!this.ffmpegOk) {
-			this.showError("Voice mode requires ffmpeg on PATH.");
+			this.unavailableReason = "Voice mode requires ffmpeg on PATH.";
+			logVoice("init: ffmpeg not found");
 			return;
 		}
 		const list = await runCapture("ffmpeg", ["-hide_banner", "-list_devices", "true", "-f", "dshow", "-i", "dummy"], 10000);
 		this.devices = parseAudioDevices(list.stderr);
+		if (this.devices.length === 0) this.unavailableReason = "Voice mode requires a microphone, but no audio device is available.";
 		this.refreshHint();
 		// ponytail: the model loads at session start (~2 GB VRAM per pi session) so the first hold streams at once.
 		if (this.config.enabled && this.devices.length > 0) void this.transcriber.ensure().catch(() => undefined);
+	}
+
+	unavailable(): string | null {
+		return this.unavailableReason;
 	}
 
 	// Footer slot while idle: Claude shows "hold space to speak" on an empty prompt for the first sessions.
@@ -873,6 +885,11 @@ export default function (pi: ExtensionAPI) {
 	pi.registerCommand("voice", {
 		description: "Voice dictation: /voice [hold|tap|off]",
 		handler: async (args, ctx) => {
+			const blocked = current?.unavailable();
+			if (blocked) {
+				pi.appendEntry("voice", { text: blocked });
+				return;
+			}
 			const out = voiceCommandOutput((args ?? "").trim().toLowerCase(), config);
 			if (out.enabled !== undefined) config.enabled = out.enabled;
 			if (out.mode) config.mode = out.mode;

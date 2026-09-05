@@ -26,7 +26,8 @@
       "./extensions/claude-effort",
       "./extensions/claude-help",
       "./extensions/claude-keys",
-      "./extensions/herdr-state"
+      "./extensions/herdr-state",
+      "./extensions/voice"
     ],
     "themes": [
       "./themes"
