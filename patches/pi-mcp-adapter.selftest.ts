@@ -17,6 +17,7 @@ const jiti = createJiti(import.meta.url, {
 
 const agentDir = process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi/agent");
 const mod = await jiti.import(path.join(agentDir, "npm/node_modules/pi-mcp-adapter/tool-result-renderer.ts"));
+const {
   createMcpDirectToolCallRenderer,
   createMcpProxyToolCallRenderer,
   createMcpToolResultRenderer,
