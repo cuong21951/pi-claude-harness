@@ -332,7 +332,7 @@ class Transcriber {
 		return new Promise((resolve, reject) => {
 			const python = process.platform === "win32" ? "py -3.12" : "python3";
 			const [cmd, ...prefix] = python.split(" ");
-			const proc = spawn(cmd, [...prefix, "-u", join(this.dir, "sidecar.py"), "--model", this.config.model, "--device", this.config.device, "--beam", String(this.config.beamSize)], {
+			const proc = spawn(cmd, [...prefix, "-u", join(this.dir, "sidecar.py"), "--model", this.config.model, "--device", this.config.device, "--beam", String(this.config.beamSize), "--parent", String(process.pid)], {
 				stdio: ["pipe", "pipe", "ignore"],
 			});
 			this.proc = proc;

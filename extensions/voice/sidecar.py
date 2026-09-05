@@ -33,13 +33,35 @@ def load_model(name, device, compute):
     return WhisperModel(name, device=device, compute_type=kind), device
 
 
+def exit_with_parent(pid):
+    # ponytail: a pi killed from outside never sends "shutdown" and the py launcher keeps our stdin
+    # open, so a leaked model would sit in VRAM; wait on the parent handle instead (Windows only).
+    if sys.platform != "win32" or not pid:
+        return
+    import ctypes
+    import threading
+
+    kernel32 = ctypes.windll.kernel32
+    handle = kernel32.OpenProcess(0x00100000, False, int(pid))
+    if not handle:
+        return
+
+    def watch():
+        kernel32.WaitForSingleObject(handle, 0xFFFFFFFF)
+        os._exit(0)
+
+    threading.Thread(target=watch, daemon=True).start()
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default="large-v3-turbo")
     parser.add_argument("--device", default="auto")
     parser.add_argument("--compute", default="auto")
     parser.add_argument("--beam", type=int, default=5)
+    parser.add_argument("--parent", type=int, default=0)
     args = parser.parse_args()
+    exit_with_parent(args.parent)
 
     model, device = load_model(args.model, args.device, args.compute)
     print(json.dumps({"ready": True, "model": args.model, "device": device}), flush=True)
