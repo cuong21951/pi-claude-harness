@@ -13,15 +13,16 @@ A [pi](https://pi.dev) coding-agent setup that looks and behaves like Claude Cod
 | `intent-tools` | bash rows show the model's one-line intent as `● description` + first output line, `ctrl+o` to expand |
 | `claude-messages` | `● ` before assistant paragraphs. With thinking hidden it leaves no placeholder line, the way Claude does |
 | `claude-working` | Claude's sparkle spinner `· ✢ * ✶ ✻ ✽` with a shimmer over the verb, elapsed time, tokens, `esc to interrupt` |
-| `claude-footer` | One muted line: extension statuses · model · think level · ctx % · $cost · git branch |
+| `claude-footer` | One muted line: extension statuses · model · think level · ctx % · $cost · git branch (the voice status takes the mode row's right-hand slot) |
 | `claude-input` | Flat rules above and below with a `> ` prompt, exactly like Claude Code 2.1.259 |
-| `claude-bottom-input` | In `regular` TUI mode, pads above the editor so the prompt and footer sit on the bottom rows like fullscreen (0 rows once the transcript overflows; never triggers a full redraw) |
+| `claude-bottom-input` | In `regular` TUI mode, pads above the editor so the prompt and footer sit on the bottom rows like fullscreen, and holds the frame at its high-water line count so a collapsing block (the `?` card, a streamed tool result) never leaves blank rows under the footer |
 | `claude-images` | `alt+v` pastes a clipboard image as an `[Image #N]` chip (Windows only; other platforms keep pi's `ctrl+v`) |
 | `claude-mcp-render` | Drops the schema dump MCP tools append on validation errors |
 | `claude-modes` | `shift+tab` cycles plan / accept edits / bypass, shown on Claude's mode row in the footer. Plan blocks writes and allows only read-only bash; accept edits applies edits without asking but confirms a side-effecting bash; bypass asks nothing. It offers plan mode when a message reads like a planning request, and asks "Plan ready. Proceed?" when a plan-mode turn ends |
 | `claude-effort` | `● high · /effort` right-aligned above the prompt; `/effort [level]` sets the thinking level |
 | `claude-help` | `?` on an empty prompt toggles the shortcut card, any key hides it |
 | `claude-keys` | Double-tap esc clears the prompt, `ctrl+s` stashes and restores it |
+| `voice` | Claude Code 2.1.261's voice dictation, local: hold Space (`/voice hold`) or tap Space on an empty prompt (`/voice tap`), `hold space to speak` / `listening…` / `● REC · tap to send` / pulsing `Voice: processing…` in the footer slot, dimmed live transcript at the cursor, the cursor becomes a mic-level bar. Needs `ffmpeg` on PATH and `py -3.12 -m pip install faster-whisper` (CUDA wheels optional); nothing leaves the machine |
 | `herdr-state` | Reports session and working/idle state to the herdr multiplexer (`HERDR_ENV=1` only) |
 | `themes/claude-dark` | Palette taken from Claude Code's own `dark-daltonized` theme: white text, `#3399ff` tool dot, `#af87ff` skill dot, `#ff6666` error, blue/red diffs, tool backgrounds painted out so no row sits in a coloured box |
 

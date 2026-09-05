@@ -17,7 +17,6 @@ const jiti = createJiti(import.meta.url, {
 
 const agentDir = process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi/agent");
 const mod = await jiti.import(path.join(agentDir, "npm/node_modules/pi-mcp-adapter/tool-result-renderer.ts"));
-const {
   createMcpDirectToolCallRenderer,
   createMcpProxyToolCallRenderer,
   createMcpToolResultRenderer,
@@ -25,6 +24,7 @@ const {
 } = mod;
 
 const plainTheme = { fg: (_r, t) => t, bold: (t) => t };
+const taggedTheme = { fg: (r, t) => `<${r}>${t}</${r}>`, bold: (t) => t };
 
 const compactOptions = resolveMcpToolRenderOptions({ toolResultRendering: "compact" });
 const boxedOptions = resolveMcpToolRenderOptions({ toolResultRendering: "boxed" });
@@ -40,16 +40,19 @@ function makeContext(isError = false) {
   return { isError, state: {} };
 }
 
-function runCall(renderer, args, context) {
-  return renderer(args, plainTheme, context);
+function runCall(renderer, args, context, theme = plainTheme) {
+  return renderer(args, theme, context);
 }
 
-function runResult(resultRenderer, result, options, context) {
-  const component = resultRenderer(result, options, plainTheme, context);
+function runResult(resultRenderer, result, options, context, theme = plainTheme) {
+  const component = resultRenderer(result, options, theme, context);
   return component.render(200).map((line) => line.trimEnd()).join("\n");
 }
 
-// --- Direct tool, 2 args ---
+// Claude Code 2.1.261, measured live: running = blinking grey dot + "Calling <server>…", finished = grey
+// "Called <server>", no result preview; ctrl+o expands to the full row. Errors keep the row (unmeasured).
+
+// --- Direct tool, 2 args: collapsed is one grey line, expanded is the full row ---
 {
   const renderCall = createMcpDirectToolCallRenderer("azure-devops-tbr_pipelines_write", "azure-devops-tbr", "pipelines_write", compactOptions);
   const renderResult = createMcpToolResultRenderer(compactOptions);
@@ -57,10 +60,15 @@ function runResult(resultRenderer, result, options, context) {
   runCall(renderCall, { action: "update_build", buildId: 512 }, context);
   assert.equal(context.state.compactTitle, "azure-devops-tbr - pipelines_write (MCP)");
   assert.equal(context.state.compactInputPreview, '(action: "update_build", buildId: 512)');
+  assert.equal(context.state.compactServer, "azure-devops-tbr");
 
-  const row = runResult(renderResult, makeResult("Build 512 queued"), { isPartial: false, expanded: false }, context);
-  assert.equal(row, '● azure-devops-tbr - pipelines_write (MCP)(action: "update_build", buildId: 512)\n  └ Build 512 queued');
-  console.log("PASS: direct tool 2 args ->", JSON.stringify(row));
+  const done = runResult(renderResult, makeResult("Build 512 queued"), { isPartial: false, expanded: false }, context);
+  assert.equal(done, "Called azure-devops-tbr");
+  const painted = runResult(renderResult, makeResult("Build 512 queued"), { isPartial: false, expanded: false }, context, taggedTheme);
+  assert.equal(painted, "<muted>Called azure-devops-tbr</muted>");
+  const expanded = runResult(renderResult, makeResult("Build 512 queued"), { isPartial: false, expanded: true }, context);
+  assert.equal(expanded, '● azure-devops-tbr - pipelines_write (MCP)(action: "update_build", buildId: 512)\n     Build 512 queued');
+  console.log("PASS: direct tool ->", JSON.stringify(done), "/", JSON.stringify(expanded));
 }
 
 // --- Direct tool, 6 args (shows 4 then …) ---
@@ -80,9 +88,9 @@ function runResult(resultRenderer, result, options, context) {
   runCall(renderCall, {}, context);
   assert.equal(context.state.compactTitle, "srv - tool (MCP)");
   assert.equal(context.state.compactInputPreview, "");
-  const row = runResult(renderResult, makeResult("ok"), { isPartial: false, expanded: false }, context);
-  assert.equal(row, "● srv - tool (MCP)\n  └ ok");
-  console.log("PASS: no args ->", JSON.stringify(row));
+  assert.equal(runResult(renderResult, makeResult("ok"), { isPartial: false, expanded: false }, context), "Called srv");
+  assert.equal(runResult(renderResult, makeResult("ok"), { isPartial: false, expanded: true }, context), "● srv - tool (MCP)\n     ok");
+  console.log("PASS: no args");
 }
 
 // --- Proxy "mcp call" row (tool embeds server_tool, no explicit server) ---
@@ -93,9 +101,8 @@ function runResult(resultRenderer, result, options, context) {
   runCall(renderCall, { tool: "azure-devops-tbr_pipelines_write", args: { action: "update_build", buildId: 512 } }, context);
   assert.equal(context.state.compactTitle, "azure-devops-tbr - pipelines_write (MCP)");
   assert.equal(context.state.compactInputPreview, '(action: "update_build", buildId: 512)');
-  const row = runResult(renderResult, makeResult("Build 512 queued"), { isPartial: false, expanded: false }, context);
-  assert.equal(row, '● azure-devops-tbr - pipelines_write (MCP)(action: "update_build", buildId: 512)\n  └ Build 512 queued');
-  console.log("PASS: proxy mcp call ->", JSON.stringify(row));
+  assert.equal(runResult(renderResult, makeResult("Build 512 queued"), { isPartial: false, expanded: false }, context), "Called azure-devops-tbr");
+  console.log("PASS: proxy mcp call");
 }
 
 // --- Proxy "mcp call ... @ server" (explicit server) ---
@@ -104,54 +111,43 @@ function runResult(resultRenderer, result, options, context) {
   const context = makeContext();
   runCall(renderCall, { tool: "pipelines_write", server: "azure-devops-tbr", args: { action: "update_build" } }, context);
   assert.equal(context.state.compactTitle, "azure-devops-tbr - pipelines_write (MCP)");
-  console.log("PASS: proxy mcp call @ server ->", context.state.compactTitle);
+  assert.equal(context.state.compactServer, "azure-devops-tbr");
+  console.log("PASS: proxy mcp call @ server");
 }
 
-// --- Other proxy action (mcp search) keeps its text, gets bullet ---
+// --- Other proxy action (mcp search) has no server: its text is the grey line ---
 {
   const renderCall = createMcpProxyToolCallRenderer(compactOptions);
   const renderResult = createMcpToolResultRenderer(compactOptions);
   const context = makeContext();
   runCall(renderCall, { search: "pipelines" }, context);
   assert.equal(context.state.compactTitle, "mcp search pipelines");
-  assert.equal(context.state.compactInputPreview, "");
+  assert.equal(context.state.compactServer, undefined);
   const row = runResult(renderResult, makeResult("found 3", { mode: "search" }), { isPartial: false, expanded: false }, context);
-  assert.equal(row, "● mcp search pipelines\n  └ found 3");
+  assert.equal(row, "mcp search pipelines");
   console.log("PASS: mcp search ->", JSON.stringify(row));
 }
 
-// --- Collapsed result: 1 line, no hint ---
+// --- Result without call state (replayed session) takes the server from the details ---
 {
-  const renderCall = createMcpDirectToolCallRenderer("srv_tool", "srv", "tool", compactOptions);
   const renderResult = createMcpToolResultRenderer(compactOptions);
-  const context = makeContext();
-  runCall(renderCall, {}, context);
-  const row = runResult(renderResult, makeResult("single line result"), { isPartial: false, expanded: false }, context);
-  assert.equal(row, "● srv - tool (MCP)\n  └ single line result");
-  console.log("PASS: collapsed 1 line ->", JSON.stringify(row));
+  const row = runResult(renderResult, makeResult("ok", { mode: "call", server: "dse", tool: "list" }), { isPartial: false, expanded: false }, { isError: false });
+  assert.equal(row, "Called dse");
+  console.log("PASS: replayed result ->", JSON.stringify(row));
 }
 
-// --- Collapsed result: 5 lines total, collapsedResultLines=1 -> hint text ---
-{
-  const renderCall = createMcpDirectToolCallRenderer("srv_tool", "srv", "tool", compactOptions);
-  const renderResult = createMcpToolResultRenderer(compactOptions);
-  const context = makeContext();
-  runCall(renderCall, {}, context);
-  const text = ["line1", "line2", "line3", "line4", "line5"].join("\n");
-  const row = runResult(renderResult, makeResult(text), { isPartial: false, expanded: false }, context);
-  assert.equal(row, "● srv - tool (MCP)\n  └ line1 … +4 lines (ctrl+o to expand)");
-  console.log("PASS: 5 lines hint ->", JSON.stringify(row));
-}
-
-// --- Error result ---
+// --- Error result: row stays, elbow + red first line, no ✗ ---
 {
   const renderCall = createMcpDirectToolCallRenderer("srv_tool", "srv", "tool", compactOptions);
   const renderResult = createMcpToolResultRenderer(compactOptions);
   const context = makeContext(true);
-  runCall(renderCall, {}, context);
+  const callComponent = runCall(renderCall, { q: 1 }, context);
+  assert.deepEqual(callComponent.render(200), [], "compact call block never prints, even on error");
   const result = makeResult("Error: boom\nstack trace line 2", { mode: "call", server: "srv", tool: "tool", error: true });
   const row = runResult(renderResult, result, { isPartial: false, expanded: false }, context);
-  assert.equal(row, "● srv - tool (MCP)\n  └ ✗ Error: boom");
+  assert.equal(row, "● srv - tool (MCP)(q: 1)\n  ⎿  Error: boom");
+  const painted = runResult(renderResult, result, { isPartial: false, expanded: false }, context, taggedTheme);
+  assert.ok(painted.endsWith("<error>  ⎿  Error: boom</error>"), "error row painted error");
   console.log("PASS: error result ->", JSON.stringify(row));
 }
 
@@ -163,18 +159,18 @@ function runResult(resultRenderer, result, options, context) {
   runCall(renderCall, {}, context);
   const text = ["line1", "line2", "line3"].join("\n");
   const row = runResult(renderResult, makeResult(text), { isPartial: false, expanded: true }, context);
-  assert.equal(row, "● srv - tool (MCP)\n    line1\n    line2\n    line3");
+  assert.equal(row, "● srv - tool (MCP)\n     line1\n     line2\n     line3");
   console.log("PASS: expanded ->", JSON.stringify(row));
 }
 
-// --- Partial (still running) ---
+// --- Partial (still running): blinking grey dot + Calling server… ---
 {
   const renderCall = createMcpDirectToolCallRenderer("srv_tool", "srv", "tool", compactOptions);
   const renderResult = createMcpToolResultRenderer(compactOptions);
   const context = makeContext();
   runCall(renderCall, { action: "update_build" }, context);
-  const row = runResult(renderResult, makeResult(undefined), { isPartial: true, expanded: false }, context);
-  assert.equal(row, '● srv - tool (MCP)(action: "update_build")\n  └ …');
+  const row = runResult(renderResult, makeResult(undefined), { isPartial: true, expanded: false }, context, taggedTheme);
+  assert.match(row, /^(<muted>● <\/muted>|  )Calling srv…$/);
   console.log("PASS: partial ->", JSON.stringify(row));
 }
 
@@ -184,12 +180,12 @@ function runResult(resultRenderer, result, options, context) {
   const renderResult = createMcpToolResultRenderer(compactOptions);
   const context = makeContext();
   runCall(renderCall, {}, context);
-  const row = runResult(renderResult, makeResult(undefined), { isPartial: false, expanded: false }, context);
-  assert.equal(row, "● srv - tool (MCP)\n  └ (empty result)");
-  console.log("PASS: empty result ->", JSON.stringify(row));
+  assert.equal(runResult(renderResult, makeResult(undefined), { isPartial: false, expanded: false }, context), "Called srv");
+  assert.equal(runResult(renderResult, makeResult(undefined), { isPartial: false, expanded: true }, context), "● srv - tool (MCP)\n     (empty result)");
+  console.log("PASS: empty result");
 }
 
-// --- Boxed mode unchanged: uses "MCP server/tool" identity line, no bullet, no └ ---
+// --- Boxed mode unchanged: uses "MCP server/tool" identity line, no bullet, no elbow ---
 {
   const renderCall = createMcpDirectToolCallRenderer("azure-devops-tbr_pipelines_write", "azure-devops-tbr", "pipelines_write", boxedOptions);
   const renderResult = createMcpToolResultRenderer(boxedOptions);

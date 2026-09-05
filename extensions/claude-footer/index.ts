@@ -4,7 +4,8 @@ const ANSI = /\x1b\[[0-9;]*m/g;
 const SEPARATOR = " · ";
 const MODE_STATUS = "modes";
 // ponytail: the permission extension badges yolo with a bare word; the mode row already says it.
-const HIDDEN_STATUSES = new Set([MODE_STATUS, "pi-permission-system"]);
+const VOICE_STATUS = "voice";
+const HIDDEN_STATUSES = new Set([MODE_STATUS, VOICE_STATUS, "pi-permission-system"]);
 const SHORTCUTS_HINT = "? for shortcuts";
 
 function plainWidth(text: string): number {
@@ -62,10 +63,11 @@ export function composeFooter(f: FooterFacts, paint: Paint, maxWidth?: number): 
 	return parts.join(paint("dim", SEPARATOR));
 }
 
-// ponytail: Claude's second row is the mode on the left and "? for shortcuts" on the right.
-export function composeModeRow(mode: string, paint: Paint, width: number): string {
-	const hint = paint("muted", SHORTCUTS_HINT);
-	const gap = width - plainWidth(mode) - SHORTCUTS_HINT.length;
+// ponytail: Claude's second row is the mode on the left and "? for shortcuts" on the right; the voice
+// slot ("hold space to speak", "listening…", errors) takes that right-hand place whenever it is set.
+export function composeModeRow(mode: string, paint: Paint, width: number, voice?: string): string {
+	const hint = voice ?? paint("muted", SHORTCUTS_HINT);
+	const gap = width - plainWidth(mode) - plainWidth(hint);
 	return gap < 1 ? mode : `${mode}${" ".repeat(gap)}${hint}`;
 }
 
@@ -109,7 +111,7 @@ export default function (pi: ExtensionAPI) {
 						width,
 					);
 					const mode = statuses.get(MODE_STATUS);
-					return mode ? [line, composeModeRow(mode, paint, width)] : [line];
+					return mode ? [line, composeModeRow(mode, paint, width, statuses.get(VOICE_STATUS))] : [line];
 				},
 				invalidate() {},
 			};
@@ -161,6 +163,9 @@ if (process.env.CLAUDE_FOOTER_SELFTEST) {
 	const row = composeModeRow("⏵⏵ accept edits on (shift+tab to cycle)", plain, 80);
 	check(row.startsWith("⏵⏵ accept edits on") && row.endsWith("? for shortcuts") && row.length === 80, "mode row: mode left, hint right, exact width");
 	check(composeModeRow("⏵⏵ accept edits on (shift+tab to cycle)", plain, 40) === "⏵⏵ accept edits on (shift+tab to cycle)", "too narrow for the hint = mode only");
+	const voiceRow = composeModeRow("⏵⏵ accept edits on (shift+tab to cycle)", plain, 80, "\x1b[2mlistening…\x1b[0m");
+	check(voiceRow.endsWith("listening…\x1b[0m") && !voiceRow.includes("? for shortcuts") && plainWidth(voiceRow) === 80, "voice slot replaces the shortcuts hint at the same width");
+	check(visibleStatuses(new Map([["voice", "listening…"], ["api-balance", "x $1"]]), plain).join("|") === "x $1", "voice status stays out of line one");
 	check(sessionCost([{ message: { usage: { cost: { total: 0.1 } } } }, { usage: { cost: 0.2 } }, {}]) === 0.30000000000000004, "cost sums both shapes");
 	console.log("\nAll claude-footer checks passed.");
 }

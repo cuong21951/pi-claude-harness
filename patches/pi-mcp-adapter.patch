@@ -7,32 +7,41 @@
  
  type McpToolResultDetails = Record<string, unknown> & { error?: unknown };
  type McpToolContentBlock = AgentToolResult<McpToolResultDetails>["content"][number];
-@@ -67,63 +67,23 @@
+@@ -26,6 +26,7 @@
+ interface McpToolRenderState {
+   compactTitle?: string;
+   compactInputPreview?: string;
++  compactServer?: string;
+ }
+ 
+ export interface McpToolRenderContext {
+@@ -67,64 +68,25 @@
    invalidate(): void {}
  }
  
-+const COMPACT_BULLET = "● ";
-+const COMPACT_RESULT_PREFIX = "  └ ";
-+const COMPACT_RESULT_CONTINUATION_PREFIX = "    ";
-+
- class CompactMcpToolResult implements Component {
+-class CompactMcpToolResult implements Component {
 -  private rendered: { width: number; lines: string[] } | null = null;
-+  private readonly text: Text;
- 
+-
 -  constructor(
 -    private readonly title: string,
 -    private readonly inputPreview: string,
 -    private readonly display: McpToolResultDisplay,
 -    private readonly theme: RenderTheme,
 -  ) {}
-+  constructor(content: string) {
-+    this.text = new Text(content, 0, 0);
-+  }
++// Claude Code 2.1.261, measured: a running MCP call is a blinking grey dot + "Calling <server>…", a finished
++// one is a single grey "Called <server>" line; ctrl+o expands to the full "● server - tool (MCP)(args)" row.
++const COMPACT_BULLET = "● ";
++const COMPACT_RESULT_PREFIX = "  ⎿  ";
++const COMPACT_RESULT_CONTINUATION_PREFIX = "     ";
++const BLINK_MS = 500;
  
-   render(width: number): string[] {
+-  render(width: number): string[] {
 -    const safeWidth = Math.max(1, Math.floor(width));
 -    if (this.rendered?.width === safeWidth) return this.rendered.lines;
--
++function blinkOn(now = Date.now()): boolean {
++  return Math.floor(now / BLINK_MS) % 2 === 0;
++}
+ 
 -    const resultLines = this.display.lines.filter((line, index, lines) => {
 -      return !(this.display.truncated && index === lines.length - 1 && line === "…");
 -    });
@@ -56,13 +65,16 @@
 -    });
 -    this.rendered = { width: safeWidth, lines: rendered };
 -    return rendered;
-+    return this.text.render(width);
+-  }
++class CompactMcpToolResult implements Component {
++  constructor(private readonly content: () => string) {}
+ 
+-  invalidate(): void {
+-    this.rendered = null;
++  render(width: number): string[] {
++    return new Text(this.content(), 0, 0).render(width);
    }
  
-   invalidate(): void {
--    this.rendered = null;
--  }
--
 -  private renderPrefix(width: number): string {
 -    if (!this.title) return "";
 -    const arrow = " → ";
@@ -77,11 +89,12 @@
 -
 -    const input = truncateToWidth(this.inputPreview, inputWidth, "…");
 -    return `${this.theme.fg("toolTitle", this.title)} ${this.theme.fg("muted", input)}${arrow}`;
-+    this.text.invalidate();
-   }
+-  }
++  invalidate(): void {}
  }
  
-@@ -211,6 +171,63 @@
+ class CollapsibleText implements Component {
+@@ -211,6 +173,65 @@
    return typeof value === "object" && value !== null && !Array.isArray(value) && Object.keys(value).length > 0;
  }
  
@@ -127,12 +140,14 @@
 +interface McpCompactCallDisplay {
 +  title: string;
 +  argsPreview: string;
++  server?: string;
 +}
 +
 +function formatMcpCompactCallDisplay(server: string, tool: string, args: Record<string, unknown> | undefined): McpCompactCallDisplay {
 +  return {
 +    title: server ? `${server} - ${tool} (MCP)` : `${tool} (MCP)`,
 +    argsPreview: formatCompactArgsPreview(args),
++    server: server || undefined,
 +  };
 +}
 +
@@ -145,7 +160,22 @@
  export function formatMcpProxyToolCallLines(
    args: McpProxyToolCallInput,
    maxInputChars = DEFAULT_MAX_CALL_INPUT_CHARS,
-@@ -292,10 +309,11 @@
+@@ -279,12 +300,9 @@
+   };
+ }
+ 
++// The compact result row carries the title and args in every state, so the call block never prints.
+ function shouldUseCompactFinalRender(options: McpToolRenderOptions, context?: McpToolRenderContext): boolean {
+-  return options.resultRendering === "compact"
+-    && context !== undefined
+-    && context.isPartial === false
+-    && context.expanded !== true
+-    && context.isError !== true;
++  return options.resultRendering === "compact" && context !== undefined;
+ }
+ 
+ function renderToolCall(
+@@ -292,10 +310,12 @@
    theme: RenderTheme | undefined,
    context: McpToolRenderContext | undefined,
    options: McpToolRenderOptions,
@@ -156,10 +186,11 @@
 -    context.state.compactInputPreview = formatCompactInputPreview(lines);
 +    context.state.compactTitle = compactDisplay?.title ?? lines[0] ?? "mcp";
 +    context.state.compactInputPreview = compactDisplay?.argsPreview ?? formatCompactInputPreview(lines);
++    context.state.compactServer = compactDisplay?.server;
    }
    if (shouldUseCompactFinalRender(options, context)) return new EmptyComponent();
    return renderToolCallLines(lines, theme);
-@@ -306,18 +324,29 @@
+@@ -306,18 +326,29 @@
    theme?: RenderTheme,
    context?: McpToolRenderContext,
  ) {
@@ -193,7 +224,7 @@
    };
  }
  
-@@ -429,6 +458,74 @@
+@@ -429,6 +460,80 @@
    return { lines, truncated: false };
  }
  
@@ -204,13 +235,24 @@
 +  return `${styledBullet}${styledTitle}${styledArgs}`;
 +}
 +
-+function formatMcpCompactPartialRow(theme: RenderTheme): string {
-+  return theme.fg("toolTitle", `${COMPACT_RESULT_PREFIX}…`);
++function formatMcpCompactRunningRow(subject: string, theme: RenderTheme): string {
++  return `${blinkOn() ? theme.fg("muted", COMPACT_BULLET) : "  "}Calling ${subject}…`;
++}
++
++function formatMcpCompactDoneRow(server: string | undefined, title: string, theme: RenderTheme): string {
++  return theme.fg("muted", server ? `Called ${server}` : title);
 +}
 +
 +function formatMcpCompactErrorRow(result: Pick<AgentToolResult<McpToolResultDetails>, "content">, theme: RenderTheme): string {
 +  const display = collectCollapsedResultLines(result.content, 1, DEFAULT_MAX_COLLAPSED_CHARS);
-+  return theme.fg("error", `${COMPACT_RESULT_PREFIX}✗ ${display.lines[0] ?? ""}`);
++  return theme.fg("error", `${COMPACT_RESULT_PREFIX}${display.lines[0] ?? ""}`);
++}
++
++function compactServer(context: McpToolRenderContext | undefined, details: McpToolResultDetails): string | undefined {
++  if (context?.state?.compactServer) return context.state.compactServer;
++  if (details.mode !== "call") return undefined;
++  if (typeof details.server === "string") return details.server;
++  return typeof details.hintServer === "string" ? details.hintServer : undefined;
 +}
 +
 +function formatMcpCompactExpandedRows(result: Pick<AgentToolResult<McpToolResultDetails>, "content">, theme: RenderTheme): string {
@@ -244,37 +286,32 @@
 +): string {
 +  const title = context?.state?.compactTitle ?? formatMcpToolResultIdentity(result.details) ?? "";
 +  const argsPreview = context?.state?.compactInputPreview ?? "";
++  const server = compactServer(context, result.details);
++  const isError = context?.isError === true || Boolean(result.details.error);
++
++  if (options.isPartial) return formatMcpCompactRunningRow(server ?? title, theme);
++  if (!options.expanded && !isError) return formatMcpCompactDoneRow(server, title, theme);
++
 +  const titleLine = title ? formatMcpCompactTitleLine(title, argsPreview, theme) : "";
-+
 +  let resultRow: string;
-+  if (options.isPartial) {
-+    resultRow = formatMcpCompactPartialRow(theme);
-+  } else if (options.expanded) {
++  if (options.expanded) {
 +    resultRow = formatMcpCompactExpandedRows(result, theme);
-+  } else if (context?.isError === true || Boolean(result.details.error)) {
-+    resultRow = formatMcpCompactErrorRow(result, theme);
 +  } else {
-+    const display = formatMcpToolResultLines(result, false, renderOptions.collapsedResultLines);
-+    const shownLines = display.lines.filter((line, index, lines) => {
-+      return !(display.truncated && index === lines.length - 1 && line === "…");
-+    });
-+    const hiddenLineCount = display.truncated ? computeHiddenResultLineCount(result, shownLines.length) : 0;
-+    resultRow = formatMcpCompactResultRows(shownLines, hiddenLineCount, theme);
++    resultRow = formatMcpCompactErrorRow(result, theme);
 +  }
-+
 +  return [titleLine, resultRow].filter((line) => line.length > 0).join("\n");
 +}
 +
  export function renderMcpToolResult(
    result: AgentToolResult<McpToolResultDetails>,
    options: ToolRenderResultOptions,
-@@ -437,19 +534,17 @@
+@@ -437,19 +542,17 @@
    renderOptions = resolveMcpToolRenderOptions(),
  ) {
    const activeTheme = theme ?? plainTheme;
 +
 +  if (renderOptions.resultRendering === "compact") {
-+    return new CompactMcpToolResult(buildCompactMcpToolResultContent(result, options, activeTheme, context, renderOptions));
++    return new CompactMcpToolResult(() => buildCompactMcpToolResultContent(result, options, activeTheme, context, renderOptions));
 +  }
 +
    if (options.isPartial) {
