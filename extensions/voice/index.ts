@@ -3,7 +3,7 @@
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { createInterface } from "node:readline";
@@ -27,6 +27,8 @@ const PULSE_FROM = 153;
 const PULSE_TO = 185;
 const PULSE_PERIOD_MS = 2000;
 const TICK_MS = 50;
+const INTERIM_MS = 500;
+const INTERIM_MIN_BYTES = 16000;
 const SILENCE_MS = 15000;
 const ERROR_MS = 5000;
 const HINT_SESSIONS = 3;
@@ -123,10 +125,6 @@ export function cleanTranscript(text: string): string {
 	return text.replace(/\s+/g, " ").trim();
 }
 
-export function joinInterim(chunks: string[]): string {
-	return cleanTranscript(chunks.filter((c) => c.trim() !== "").join(" "));
-}
-
 // Claude's insert rule: one space between the anchor and the transcript unless a space is already there.
 export function joinAround(before: string, text: string, after: string): string {
 	if (text === "") return before + after;
@@ -154,6 +152,26 @@ export function chunkLevel(pcm: Buffer): number {
 		sum += v * v;
 	}
 	return Math.sqrt(Math.min(Math.sqrt(sum / samples) / 2000, 1));
+}
+
+// 16 kHz mono 16-bit WAV around the PCM ffmpeg streams; the interim and final passes read this, not ffmpeg files.
+export function wavFromPcm(chunks: Buffer[], sampleRate: number = 16000): Buffer {
+	const pcm = Buffer.concat(chunks);
+	const header = Buffer.alloc(44);
+	header.write("RIFF", 0);
+	header.writeUInt32LE(36 + pcm.length, 4);
+	header.write("WAVE", 8);
+	header.write("fmt ", 12);
+	header.writeUInt32LE(16, 16);
+	header.writeUInt16LE(1, 20);
+	header.writeUInt16LE(1, 22);
+	header.writeUInt32LE(sampleRate, 24);
+	header.writeUInt32LE(sampleRate * 2, 28);
+	header.writeUInt16LE(2, 32);
+	header.writeUInt16LE(16, 34);
+	header.write("data", 36);
+	header.writeUInt32LE(pcm.length, 40);
+	return Buffer.concat([header, pcm]);
 }
 
 export class LevelSmoother {
@@ -366,7 +384,7 @@ class Transcriber {
 		this.ready = null;
 	}
 
-	transcribe(wav: string, initialPrompt: string): Promise<string> {
+	transcribe(wav: string, initialPrompt: string, beam: number = this.config.beamSize): Promise<string> {
 		return this.ensure().then(
 			() =>
 				new Promise<string>((resolve, reject) => {
@@ -376,7 +394,7 @@ class Transcriber {
 						reject(new Error("transcription timed out"));
 					}, 180_000);
 					this.pending.set(id, { resolve, reject, timer });
-					this.proc?.stdin?.write(JSON.stringify({ id, wav, language: this.config.language, initial_prompt: initialPrompt }) + "\n");
+					this.proc?.stdin?.write(JSON.stringify({ id, wav, beam, language: this.config.language, initial_prompt: initialPrompt }) + "\n");
 				}),
 		);
 	}
@@ -406,15 +424,15 @@ export class VoiceRecorder {
 	private warmupSpaces = 0;
 	private warmupTimer?: ReturnType<typeof setTimeout>;
 	private proc: ChildProcess | null = null;
-	private wav = "";
 	private segDir = "";
 	private anchor = "";
 	private promptHint = "";
 	private exitCode: number | null = null;
 	private stderr = "";
-	private interimChunks: string[] = [];
+	private pcm: Buffer[] = [];
+	private pcmBytes = 0;
+	private interimBytes = 0;
 	private interim = "";
-	private seenSegs = new Set<string>();
 	private interimTimer?: ReturnType<typeof setTimeout>;
 	private interimBusy = false;
 	private levels: number[] = [];
@@ -450,6 +468,8 @@ export class VoiceRecorder {
 		const list = await runCapture("ffmpeg", ["-hide_banner", "-list_devices", "true", "-f", "dshow", "-i", "dummy"], 10000);
 		this.devices = parseAudioDevices(list.stderr);
 		this.refreshHint();
+		// ponytail: the model loads at session start (~2 GB VRAM per pi session) so the first hold streams at once.
+		if (this.config.enabled && this.devices.length > 0) void this.transcriber.ensure().catch(() => undefined);
 	}
 
 	// Footer slot while idle: Claude shows "hold space to speak" on an empty prompt for the first sessions.
@@ -536,27 +556,22 @@ export class VoiceRecorder {
 		this.mode = mode;
 		this.segDir = join(tmpdir(), `pi-voice-${Date.now()}`);
 		mkdirSync(this.segDir, { recursive: true });
-		this.wav = join(this.segDir, "full.wav");
 		this.exitCode = null;
 		this.stderr = "";
-		this.interimChunks = [];
+		this.pcm = [];
+		this.pcmBytes = 0;
+		this.interimBytes = 0;
 		this.interim = "";
-		this.seenSegs = new Set();
 		this.levels = [];
 		this.smoother.reset();
 		this.hadSignal = false;
 		void this.gitBranch().then((branch) => {
 			this.promptHint = branch ? `Project ${basename(this.cwd)}. Git branch ${branch}.` : `Project ${basename(this.cwd)}.`;
 		});
-		const pcm = ["-map", "0:a", "-ac", "1", "-ar", "16000"];
+		void this.transcriber.ensure().catch(() => undefined);
 		const proc = spawn(
 			"ffmpeg",
-			[
-				"-hide_banner", "-loglevel", "error", "-y", "-t", String(this.config.maxDurationSec), "-f", "dshow", "-i", `audio=${mic}`,
-				...pcm, "-c:a", "pcm_s16le", "full.wav",
-				...pcm, "-c:a", "pcm_s16le", "-f", "segment", "-segment_time", "2", "-reset_timestamps", "1", "seg_%03d.wav",
-				...pcm, "-f", "s16le", "pipe:1",
-			],
+			["-hide_banner", "-loglevel", "error", "-t", String(this.config.maxDurationSec), "-f", "dshow", "-i", `audio=${mic}`, "-map", "0:a", "-ac", "1", "-ar", "16000", "-f", "s16le", "pipe:1"],
 			{ cwd: this.segDir, stdio: ["pipe", "pipe", "pipe"] },
 		);
 		this.proc = proc;
@@ -574,7 +589,7 @@ export class VoiceRecorder {
 			this.stderr += chunk.toString();
 		});
 		this.ticker = setInterval(() => this.tick(), TICK_MS);
-		this.interimTimer = setInterval(() => void this.pollInterim(), 1500);
+		this.interimTimer = setInterval(() => void this.pollInterim(), INTERIM_MS);
 		this.maxTimer = setTimeout(() => void this.finish(false), this.config.maxDurationSec * 1000);
 		if (mode === "hold") this.armGapTimer();
 		proc.on("error", () => this.abortStart("Voice recording could not start ffmpeg."));
@@ -591,6 +606,8 @@ export class VoiceRecorder {
 	}
 
 	private onPcm(chunk: Buffer): void {
+		this.pcm.push(chunk);
+		this.pcmBytes += chunk.length;
 		const level = chunkLevel(chunk);
 		if (level > SIGNAL_LEVEL) this.hadSignal = true;
 		if (this.levels.length >= LEVEL_RING) this.levels.shift();
@@ -628,30 +645,24 @@ export class VoiceRecorder {
 		this.removeSessionFiles();
 	}
 
+	// ponytail: every half second the whole recording so far is decoded again with beam 1, so words show
+	// while you speak like Claude's streaming service. Quadratic in length; fine under the 2-minute cap.
 	private async pollInterim(): Promise<void> {
-		if (this.state !== "recording" || this.interimBusy) return;
-		let names: string[];
-		try {
-			names = readdirSync(this.segDir).filter((n) => /^seg_\d+\.wav$/.test(n)).sort();
-		} catch {
-			return;
-		}
-		const completed = names.slice(0, -1).filter((n) => !this.seenSegs.has(n));
-		if (completed.length === 0) return;
+		if (this.state !== "recording" || this.interimBusy || this.pcmBytes - this.interimBytes < INTERIM_MIN_BYTES) return;
 		this.interimBusy = true;
 		try {
-			for (const name of completed) {
-				this.seenSegs.add(name);
-				try {
-					const chunk = await this.transcriber.transcribe(join(this.segDir, name), this.promptHint);
-					this.interimChunks.push(chunk);
-					if (chunk.trim() !== "") this.lastLoudAt = Date.now();
-				} catch {
-					// Interim is best effort; the full-file pass at the end is authoritative.
-				}
+			this.interimBytes = this.pcmBytes;
+			const wav = join(this.segDir, "interim.wav");
+			writeFileSync(wav, wavFromPcm(this.pcm));
+			const text = cleanTranscript(await this.transcriber.transcribe(wav, this.promptHint, 1));
+			if (this.state !== "recording") return;
+			if (text !== this.interim) {
+				if (text !== "") this.lastLoudAt = Date.now();
+				this.interim = text;
+				this.ui.requestRender();
 			}
-			this.interim = joinInterim(this.interimChunks);
-			this.ui.requestRender();
+		} catch {
+			// Interim is best effort; the final pass on release is authoritative.
 		} finally {
 			this.interimBusy = false;
 		}
@@ -696,7 +707,6 @@ export class VoiceRecorder {
 			if (cancelled) {
 				proc?.kill();
 			} else {
-				// ponytail: "q" lets ffmpeg finalize the WAV header; kill() would corrupt it.
 				proc?.stdin?.write("q");
 				await new Promise<void>((resolve) => {
 					const done = () => resolve();
@@ -704,7 +714,7 @@ export class VoiceRecorder {
 					setTimeout(() => {
 						proc?.kill();
 						resolve();
-					}, 3000);
+					}, 1000);
 				});
 			}
 		} finally {
@@ -722,19 +732,16 @@ export class VoiceRecorder {
 		this.processingAt = Date.now();
 		this.ui.setSlot(processingText(0));
 		this.ticker = setInterval(() => this.tick(), TICK_MS);
-		let size = 0;
-		try {
-			size = statSync(this.wav).size;
-		} catch {
-			size = 0;
-		}
-		logVoice(`stop size=${size} exit=${this.exitCode} signal=${this.hadSignal}`);
+		const size = this.pcmBytes;
+		logVoice(`stop size=${size} exit=${this.exitCode} signal=${this.hadSignal} interim=${JSON.stringify(this.interim.slice(0, 60))}`);
 		try {
 			if (size < 4096 || !this.hadSignal) {
 				this.showError(NO_AUDIO);
 				return;
 			}
-			const text = cleanTranscript(await this.transcriber.transcribe(this.wav, this.promptHint || `Project ${basename(this.cwd)}.`));
+			const wav = join(this.segDir, "final.wav");
+			writeFileSync(wav, wavFromPcm(this.pcm));
+			const text = cleanTranscript(await this.transcriber.transcribe(wav, this.promptHint || `Project ${basename(this.cwd)}.`));
 			if (!text) {
 				this.showError(NO_SPEECH);
 				return;
@@ -768,8 +775,8 @@ export class VoiceRecorder {
 		} catch {
 			// Best effort; tmpdir is OS-cleaned anyway.
 		}
-		this.wav = "";
 		this.segDir = "";
+		this.pcm = [];
 	}
 
 	private async gitBranch(): Promise<string> {
@@ -893,7 +900,9 @@ if (process.env.VOICE_SELFTEST) {
 	check(warmupHit([now - 500, now - 300, now - 100, now], now, 4, 600) === true, "four fast spaces is a hold");
 	check(warmupHit([now - 900, now - 300, now - 100, now], now, 4, 600) === false, "stale spaces do not count");
 	check(cleanTranscript("  Chào\n bạn\r\n") === "Chào bạn", "collapses whitespace incl. Vietnamese");
-	check(joinInterim(["Chào bạn", "làm PR nhé"]) === "Chào bạn làm PR nhé", "chunks join with one space");
+	const wav = wavFromPcm([Buffer.from([1, 0, 2, 0]), Buffer.from([3, 0])]);
+	check(wav.length === 50 && wav.toString("ascii", 0, 4) === "RIFF" && wav.readUInt32LE(40) === 6 && wav.readUInt32LE(24) === 16000 && wav.readUInt16LE(22) === 1, "wav header: 16 kHz mono 16-bit, data size 6");
+	check(wav.readUInt32LE(4) === 42 && wav.readInt16LE(48) === 3, "wav riff size and payload order");
 
 	check(joinAround("refactor the auth middleware to", "use the helper", "") === "refactor the auth middleware to use the helper", "one space after a word");
 	check(joinAround("hi ", "there", "") === "hi there", "no double space");

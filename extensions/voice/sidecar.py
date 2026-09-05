@@ -58,7 +58,7 @@ def main():
         try:
             segments, info = model.transcribe(
                 request["wav"],
-                beam_size=args.beam,
+                beam_size=int(request.get("beam") or args.beam),
                 vad_filter=True,
                 language=request.get("language"),
                 initial_prompt=request.get("initial_prompt") or None,
