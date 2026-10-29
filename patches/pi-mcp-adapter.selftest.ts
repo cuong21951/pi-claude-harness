@@ -223,4 +223,26 @@ function runResult(resultRenderer, result, options, context, theme = plainTheme)
   console.log("PASS: grouped MCP calls ->", JSON.stringify(merged), "(first row hidden, ctrl+o restores it)");
 }
 
+{
+  const { maybeStartUiSession } = await jiti.import(path.join(agentDir, "npm/node_modules/pi-mcp-adapter/ui-session.ts"));
+  const notices = [];
+  const printed = [];
+  const originalLog = console.log;
+  console.log = (...args) => printed.push(args.join(" "));
+  process.env.MCP_UI_VIEWER = "none";
+  try {
+    const session = await maybeStartUiSession(
+      { ui: { notify: (text) => notices.push(text) }, manager: {} },
+      { serverName: "atlassian", toolName: "getJiraIssue", toolArgs: {}, uiResourceUri: "ui://jira/issue" },
+    );
+    assert.equal(session, null);
+  } finally {
+    console.log = originalLog;
+    delete process.env.MCP_UI_VIEWER;
+  }
+  assert.deepEqual(notices, []);
+  assert.deepEqual(printed, []);
+  console.log("PASS: MCP_UI_VIEWER=none -> no UI session, no notice, no [MCP-UI] line");
+}
+
 console.log("\nAll selftest assertions passed.");

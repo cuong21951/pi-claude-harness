@@ -365,3 +365,16 @@
    const display = formatMcpToolResultLines(result, expanded, renderOptions.collapsedResultLines);
    const identity = formatMcpToolResultIdentity(result.details);
    const output = [
+--- a/ui-session.ts
++++ b/ui-session.ts
+@@ -208,6 +208,10 @@
+   });
+   const runtimeSignal = combineAbortSignals(state.owner?.signal, request.signal) ?? new AbortController().signal;
+ 
++  if (["none", "off", "disabled"].includes(process.env.MCP_UI_VIEWER?.toLowerCase() ?? "")) {
++    return null;
++  }
++
+   try {
+     throwIfAborted(runtimeSignal);
+     if (
