@@ -11,7 +11,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import { doneLine, resultRows, type Row, runningLine, type Style, WRITE_TOOLS, writeCallLine } from "./format.ts";
-import { blinkOn, dynamic, failed, finished, track } from "./rows.ts";
+import { blinkOn, dynamic, failed, finished, summaryFor, track, watch } from "./rows.ts";
 
 // ponytail: only the render slots change; execute, schema and prompt metadata are the built-in definition's.
 const DEFINITIONS = {
@@ -69,7 +69,8 @@ export default function (pi: ExtensionAPI) {
 				if (WRITE_TOOLS.has(tool)) return dynamic((width) => [truncateToWidth(writeCallLine(tool, args, s), width)]);
 				return dynamic((width) => (finished.has(context.toolCallId ?? "") ? [] : [truncateToWidth(runningLine(tool, args, blinkOn(), s), width)]));
 			},
-			renderResult(result: any, { expanded, isPartial }: { expanded: boolean; isPartial: boolean }, theme: Theme, context: { args: Record<string, unknown>; isError?: boolean; toolCallId?: string }) {
+			renderResult(result: any, { expanded, isPartial }: { expanded: boolean; isPartial: boolean }, theme: Theme, context: { args: Record<string, unknown>; isError?: boolean; toolCallId?: string; invalidate?: () => void }) {
+				if (context.toolCallId && context.invalidate) watch(context.toolCallId, context.invalidate);
 				const text = result.content
 					.filter((block: { type: string }) => block.type === "text")
 					.map((block: { text?: string }) => block.text ?? "")
@@ -80,7 +81,9 @@ export default function (pi: ExtensionAPI) {
 				const view = { expanded, isPartial, hint: keyHint("app.tools.expand", "to expand") };
 				const s = style(theme);
 				const rows = resultRows(tool, context.args, outcome, view, s);
-				const head = WRITE_TOOLS.has(tool) || isPartial ? [] : [doneLine(tool, context.args, s)];
+				const group = WRITE_TOOLS.has(tool) || isPartial || isError || expanded ? null : summaryFor(context.toolCallId ?? "", s.bold);
+				if (group === "") return dynamic(() => []);
+				const head = WRITE_TOOLS.has(tool) || isPartial ? [] : [group === null ? doneLine(tool, context.args, s) : s.fg("muted", group)];
 				return dynamic((width) => [...head, ...(rows ? [rows.head, ...rows.rows.map((row) => paintRow(row, width))] : [])].map((line) => truncateToWidth(line, width)));
 			},
 		});

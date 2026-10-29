@@ -1,3 +1,5 @@
+import { isAbort } from "./rows.ts";
+
 export type Paint = (role: string, text: string) => string;
 export interface Style {
 	fg: Paint;
@@ -152,6 +154,7 @@ export function resultRows(tool: string, args: Record<string, unknown>, outcome:
 	const elbow = s.fg("muted", ELBOW);
 	const write = WRITE_TOOLS.has(tool);
 	if (view.isPartial) return { head: elbow + s.fg("muted", write ? "…" : target(tool, args, s.home)), rows: [] };
+	if (outcome.isError && isAbort(outcome.text)) return null;
 	if (outcome.isError) {
 		const [first, ...rest] = outcome.text.split("\n");
 		const rows = view.expanded ? rest.map((line) => ({ kind: "muted" as RowKind, text: `    ${s.fg("error", line)}` })) : [];
@@ -182,6 +185,7 @@ if (process.env.CLAUDE_TOOLS_SELFTEST) {
 	check(writeCallLine("write", { path: "n.ts" }, plain) === "● Write(n.ts)", "write call");
 
 	check(resultRows("read", { path: "a" }, ok("l1\nl2\nl3\n"), view(), plain) === null, "collapsed read result draws nothing");
+	check(resultRows("read", { path: "a" }, { text: "Operation aborted", isError: true }, view(), plain) === null, "an aborted tool draws no error row (pi core prints Interrupted)");
 	const expanded = resultRows("read", { path: "a" }, ok("l1\nl2"), view(true), plain)!;
 	check(expanded.head === "  ⎿  Read 2 lines" && expanded.rows.map((r) => r.text).join("|") === "    l1|    l2", "expanded read shows elbow, summary and output");
 	check(resultRows("read", { path: "a" }, ok(""), { ...view(), isPartial: true }, tagged)!.head === "<muted>  ⎿  </muted><muted>a</muted>", "partial read shows the target under the elbow");

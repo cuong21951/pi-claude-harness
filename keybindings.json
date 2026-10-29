@@ -4,6 +4,7 @@
   "app.clipboard.pasteImage": "ctrl+alt+v",
   "app.thinking.cycle": "ctrl+alt+t",
   "app.thinking.toggle": "ctrl+shift+t",
+  "app.thinking.save": "ctrl+alt+s",
   "app.models.save": "ctrl+alt+s",
   "app.session.toggleSort": "ctrl+alt+s"
 }

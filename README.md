@@ -31,7 +31,7 @@ A [pi](https://pi.dev) coding-agent setup that looks and behaves like Claude Cod
 | Piece | Effect |
 |---|---|
 | `extensions/pi-permission-system/config.json` | Config for [`@gotgenes/pi-permission-system`](https://github.com/gotgenes/pi-packages): yolo mode with a review log, credentials file denied |
-| `cheap-models` + `cheap-models.json` | Only models under the price caps / allow list can run; an expensive pick is swapped back before the request goes out |
+| `cheap-models` + `cheap-models.json` | Only models under the price caps / allow list, or on a flat-fee `subscriptions` provider (default `github-copilot/*`), can run; an expensive pick is swapped back before the request goes out |
 | `deepseek-guards` | Blocks image reads on text-only DeepSeek models, unbounded scans, busy-wait loops |
 | `no-code-comments` | Rejects edits that add code comments (the `ponytail:` marker is allowed) |
 | `rtk-bash` | Rewrites bash commands through [rtk](https://github.com/rtk-ai/rtk) when it is installed (60-90% less tool output); no-op without it |
@@ -51,7 +51,7 @@ What the harness matches today, and what it does not, so the next pass starts fr
 **Matched**
 
 - Colours measured on screen, not guessed: Claude Code 2.1.260 in `dark-daltonized` was driven in a pseudo-terminal and every run of characters read back with its colour. Tool dot `5fafff`, grey `949494`, separators `585858`, model `87afd7`, green `87af87`, spinner `ffaf5f` with `ffd787` shimmer, diff backgrounds `5f0000` / `00005f`, user message `3a3a3a`. The theme carries these values.
-- Tool rows behave like Claude's. A running tool is a blinking grey dot plus "Reading a.txt" or the bash description, with `⎿ $ cmd` under it. A finished read-only tool (read, search, list, bash) collapses to one grey line: `Read a.txt`, `Ran Check git status`; ctrl+o brings the elbow and the output back, and a failed command keeps its red row. Write and Update keep the blue dot, a grey `⎿`, bold counts, and show the written lines or the diff with line numbers and Claude's backgrounds. Claude merges consecutive read-only tools into "Read 1 file, ran 2 shell commands"; pi keeps one block per tool, so it is one grey line per tool.
+- Tool rows behave like Claude's. A running tool is a blinking grey dot plus "Reading a.txt" or the bash description, with `⎿ $ cmd` under it. Consecutive finished read-only tools (read, search, list, bash) collapse into one grey line with Claude's own wording and order, `Searched for 1 pattern, read 2 files, listed 1 directory, ran 1 shell command` (counts bold; an `ls` command counts as a listing); assistant text, a new prompt, a failed call or a Write/Update starts a new group. ctrl+o brings every tool's own line, elbow and output back, and a failed command keeps its red row. Write and Update keep the blue dot, a grey `⎿`, bold counts, and show the written lines or the diff with line numbers and Claude's backgrounds. pi cannot merge blocks, so every member but the last draws nothing and the last draws the group line; the earlier blocks are repainted through the render context they hand us.
 - A turn ends with Claude's grey `✻ Churned for 13s · done 12:58 AM`, the spinner verb in the past tense.
 - No coloured block behind a tool row, because Claude never draws one.
 - Modes on `shift+tab`, with the plan-mode offer when you ask for a plan, and the "Plan ready. Proceed?" question (accept edits / bypass / keep planning) when a plan-mode turn ends. Accepting continues the same conversation.

@@ -1,3 +1,14 @@
+--- a/index.ts
++++ b/index.ts
+@@ -280,7 +280,7 @@
+         : {}),
+       execute: createDirectToolExecutor(() => state, () => initPromise, spec),
+       renderShell: toolRenderShell,
+-      renderCall: createMcpDirectToolCallRenderer(spec.prefixedName, toolRenderOptions),
++      renderCall: createMcpDirectToolCallRenderer(spec.prefixedName, spec.serverName, spec.originalName, toolRenderOptions),
+       renderResult: renderMcpToolResult,
+     });
+   }
 --- a/tool-result-renderer.ts
 +++ b/tool-result-renderer.ts
 @@ -1,5 +1,5 @@
@@ -15,7 +26,7 @@
  }
  
  export interface McpToolRenderContext {
-@@ -67,64 +68,25 @@
+@@ -67,64 +68,26 @@
    invalidate(): void {}
  }
  
@@ -72,7 +83,8 @@
 -  invalidate(): void {
 -    this.rendered = null;
 +  render(width: number): string[] {
-+    return new Text(this.content(), 0, 0).render(width);
++    const content = this.content();
++    return content === "" ? [] : new Text(content, 0, 0).render(width);
    }
  
 -  private renderPrefix(width: number): string {
@@ -94,7 +106,7 @@
  }
  
  class CollapsibleText implements Component {
-@@ -211,6 +173,65 @@
+@@ -211,6 +174,65 @@
    return typeof value === "object" && value !== null && !Array.isArray(value) && Object.keys(value).length > 0;
  }
  
@@ -160,7 +172,7 @@
  export function formatMcpProxyToolCallLines(
    args: McpProxyToolCallInput,
    maxInputChars = DEFAULT_MAX_CALL_INPUT_CHARS,
-@@ -279,12 +300,9 @@
+@@ -279,12 +301,9 @@
    };
  }
  
@@ -175,7 +187,7 @@
  }
  
  function renderToolCall(
-@@ -292,10 +310,12 @@
+@@ -292,10 +311,12 @@
    theme: RenderTheme | undefined,
    context: McpToolRenderContext | undefined,
    options: McpToolRenderOptions,
@@ -190,7 +202,7 @@
    }
    if (shouldUseCompactFinalRender(options, context)) return new EmptyComponent();
    return renderToolCallLines(lines, theme);
-@@ -306,18 +326,29 @@
+@@ -306,18 +327,29 @@
    theme?: RenderTheme,
    context?: McpToolRenderContext,
  ) {
@@ -224,7 +236,7 @@
    };
  }
  
-@@ -429,6 +460,80 @@
+@@ -429,6 +461,103 @@
    return { lines, truncated: false };
  }
  
@@ -239,7 +251,30 @@
 +  return `${blinkOn() ? theme.fg("muted", COMPACT_BULLET) : "  "}Calling ${subject}…`;
 +}
 +
-+function formatMcpCompactDoneRow(server: string | undefined, title: string, theme: RenderTheme): string {
++// claude-tools (extensions/claude-tools/rows.ts) merges consecutive calls to one server into Claude's
++// "Called dse 2 times" and hides the earlier rows; it shares its functions through globalThis.
++type ClaudeRows = {
++  summaryFor(id: string, bold: (text: string) => string): string | null;
++  noteServer(id: string, server: string): void;
++  watch(id: string, invalidate: () => void): void;
++};
++
++function claudeRows(): ClaudeRows | undefined {
++  const rows = (globalThis as { __claudeRows?: Partial<ClaudeRows> }).__claudeRows;
++  return rows?.summaryFor && rows.noteServer && rows.watch ? (rows as ClaudeRows) : undefined;
++}
++
++function formatMcpCompactDoneRow(server: string | undefined, title: string, theme: RenderTheme, context: McpToolRenderContext | undefined): string {
++  const rows = claudeRows();
++  const id = (context as { toolCallId?: string } | undefined)?.toolCallId;
++  if (rows && id && server) {
++    rows.noteServer(id, server);
++    const invalidate = (context as { invalidate?: () => void } | undefined)?.invalidate;
++    if (invalidate) rows.watch(id, invalidate);
++    const group = rows.summaryFor(id, theme.bold ?? ((text) => text));
++    if (group === "") return "";
++    if (group !== null) return theme.fg("muted", group);
++  }
 +  return theme.fg("muted", server ? `Called ${server}` : title);
 +}
 +
@@ -290,7 +325,7 @@
 +  const isError = context?.isError === true || Boolean(result.details.error);
 +
 +  if (options.isPartial) return formatMcpCompactRunningRow(server ?? title, theme);
-+  if (!options.expanded && !isError) return formatMcpCompactDoneRow(server, title, theme);
++  if (!options.expanded && !isError) return formatMcpCompactDoneRow(server, title, theme, context);
 +
 +  const titleLine = title ? formatMcpCompactTitleLine(title, argsPreview, theme) : "";
 +  let resultRow: string;
@@ -305,7 +340,7 @@
  export function renderMcpToolResult(
    result: AgentToolResult<McpToolResultDetails>,
    options: ToolRenderResultOptions,
-@@ -437,19 +542,17 @@
+@@ -437,19 +566,17 @@
    renderOptions = resolveMcpToolRenderOptions(),
  ) {
    const activeTheme = theme ?? plainTheme;
@@ -330,14 +365,3 @@
    const display = formatMcpToolResultLines(result, expanded, renderOptions.collapsedResultLines);
    const identity = formatMcpToolResultIdentity(result.details);
    const output = [
---- a/index.ts
-+++ b/index.ts
-@@ -280,7 +280,7 @@
-         : {}),
-       execute: createDirectToolExecutor(() => state, () => initPromise, spec),
-       renderShell: toolRenderShell,
--      renderCall: createMcpDirectToolCallRenderer(spec.prefixedName, toolRenderOptions),
-+      renderCall: createMcpDirectToolCallRenderer(spec.prefixedName, spec.serverName, spec.originalName, toolRenderOptions),
-       renderResult: renderMcpToolResult,
-     });
-   }

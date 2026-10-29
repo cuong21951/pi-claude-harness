@@ -1,0 +1,183 @@
+--- a/index.ts
++++ b/index.ts
+@@ -58,6 +58,22 @@
+ import { isFirecrawlAvailable } from "./firecrawl.ts";
+ import { isJinaSearchAvailable } from "./jina-search.ts";
+ import { isSerpdiveAvailable } from "./serpdive.ts";
++
++// Claude Code 2.1.261 look for fetch (measured 2026-09-05): "● Fetch(url)" with a grey dot blinking while
++// it runs and a blue one once done, then "  ⎿  Received 559 bytes (200 OK)"; pi-web-access has no HTTP
++// status, so the line says chars. The finished set is claude-tools' (shared through globalThis).
++const CLAUDE_ELBOW = "  ⎿  ";
++const claudeRows = ((globalThis as any).__claudeRows ??= { finished: new Set<string>(), failed: new Set<string>() }) as { finished: Set<string> };
++
++export function claudeDot(id: string, theme: { fg: (role: any, text: string) => string }, now = Date.now()): string {
++	if (claudeRows.finished.has(id)) return theme.fg("borderAccent", "● ");
++	return Math.floor(now / 500) % 2 === 0 ? theme.fg("muted", "● ") : "  ";
++}
++
++function claudeRow(render: (width: number) => string[]) {
++	return { render, invalidate() {} };
++}
++
+ import { isKagiAvailable } from "./kagi.ts";
+ import { isBochaAvailable } from "./bocha.ts";
+ import { isOllamaAvailable } from "./ollama.ts";
+@@ -2685,136 +2701,29 @@
+ 			});
+ 		},
+ 
+-		renderCall(args, theme) {
+-			const { urlList, options } = normalizeFetchContentParams(args);
+-			const { prompt, timestamp, frames, model, mode, answerModel, auth } = options;
+-			if (urlList.length === 0) {
+-				return new Text(theme.fg("toolTitle", theme.bold("fetch ")) + theme.fg("error", "(no URL)"), 0, 0);
+-			}
+-			const lines: string[] = [];
+-			if (urlList.length === 1) {
+-				const display = urlList[0].length > 60 ? urlList[0].slice(0, 57) + "..." : urlList[0];
+-				lines.push(theme.fg("toolTitle", theme.bold("fetch ")) + theme.fg("accent", display));
+-			} else {
+-				lines.push(theme.fg("toolTitle", theme.bold("fetch ")) + theme.fg("accent", `${urlList.length} URLs`));
+-				for (const u of urlList.slice(0, 5)) {
+-					const display = u.length > 60 ? u.slice(0, 57) + "..." : u;
+-					lines.push(theme.fg("muted", "  " + display));
+-				}
+-				if (urlList.length > 5) {
+-					lines.push(theme.fg("muted", `  ... and ${urlList.length - 5} more`));
+-				}
+-			}
+-			if (mode && mode !== "readable") {
+-				lines.push(theme.fg("dim", "  mode: ") + theme.fg("warning", mode));
+-			}
+-			if (timestamp) {
+-				lines.push(theme.fg("dim", "  timestamp: ") + theme.fg("warning", timestamp));
+-			}
+-			if (typeof frames === "number") {
+-				lines.push(theme.fg("dim", "  frames: ") + theme.fg("warning", String(frames)));
+-			}
+-			if (prompt) {
+-				const display = prompt.length > 250 ? prompt.slice(0, 247) + "..." : prompt;
+-				lines.push(theme.fg("dim", "  prompt: ") + theme.fg("muted", `"${display}"`));
+-			}
+-			if (model) {
+-				lines.push(theme.fg("dim", "  model: ") + theme.fg("warning", model));
+-			}
+-			if (answerModel) {
+-				lines.push(theme.fg("dim", "  answer model: ") + theme.fg("warning", answerModel));
+-			}
+-			if (auth !== undefined) {
+-				lines.push(theme.fg("dim", "  auth: ") + theme.fg("warning", auth === true ? "true" : auth));
+-			}
+-			return new Text(lines.join("\n"), 0, 0);
+-		},
+-
+-		renderResult(result, { expanded, isPartial }, theme) {
+-			const details = result.details as {
+-				urlCount?: number;
+-				successful?: number;
+-				totalChars?: number;
+-				error?: string;
+-				title?: string;
+-				truncated?: boolean;
+-				responseId?: string;
+-				phase?: string;
+-				progress?: number;
+-				hasImage?: boolean;
+-				imageCount?: number;
+-				prompt?: string;
+-				timestamp?: string;
+-				frames?: number;
+-				duration?: number;
+-			};
+-
+-			if (isPartial) {
+-				const progress = details?.progress ?? 0;
+-				const bar = "\u2588".repeat(Math.floor(progress * 10)) + "\u2591".repeat(10 - Math.floor(progress * 10));
+-				return new Text(theme.fg("accent", `[${bar}] ${details?.phase || "fetching"}`), 0, 0);
+-			}
+-
+-			if (details?.error) {
+-				const fd = details as typeof details & { urls?: string[] };
+-				const extras: string[] = [];
+-				if (typeof fd.urlCount === "number" || typeof fd.successful === "number") {
+-					extras.push(`urls: ${fd.successful ?? 0}/${fd.urlCount ?? 0} succeeded`);
+-				}
+-				if (fd.responseId) extras.push(`response id: ${fd.responseId}`);
+-				if (fd.urls && fd.urls.length > 0) {
+-					for (const u of fd.urls.slice(0, 8)) extras.push(`  \u25b8 ${u}`);
+-					if (fd.urls.length > 8) extras.push(`  ... and ${fd.urls.length - 8} more`);
+-				}
+-				const plan = buildSearchErrorPlan({ error: details.error, extraLines: extras });
+-				if (plan) return renderSearchErrorPlan(plan, expanded, theme);
+-				return new Text(theme.fg("error", `Error: ${details.error}`), 0, 0);
+-			}
++		renderShell: "self",
+ 
+-			if (details?.urlCount === 1) {
+-				const title = details?.title || "Untitled";
+-				const imgCount = details?.imageCount ?? (details?.hasImage ? 1 : 0);
+-				const imageBadge = imgCount > 1
+-					? theme.fg("accent", ` [${imgCount} images]`)
+-					: imgCount === 1
+-						? theme.fg("accent", " [image]")
+-						: "";
+-				let statusLine = theme.fg("success", title) + theme.fg("muted", ` (${details?.totalChars ?? 0} chars)`) + imageBadge;
+-				if (details?.truncated) {
+-					statusLine += theme.fg("warning", " [truncated]");
+-				}
+-				if (typeof details?.duration === "number") {
+-					statusLine += theme.fg("muted", ` | ${formatSeconds(Math.floor(details.duration))} total`);
+-				}
+-				const textContent = result.content.find((c) => c.type === "text")?.text || "";
+-				if (!expanded) {
+-					const brief = textContent.length > 200 ? textContent.slice(0, 200) + "..." : textContent;
+-					return new Text(statusLine + "\n" + theme.fg("dim", brief), 0, 0);
+-				}
+-				const lines = [statusLine];
+-				if (details?.prompt) {
+-					const display = details.prompt.length > 250 ? details.prompt.slice(0, 247) + "..." : details.prompt;
+-					lines.push(theme.fg("dim", `  prompt: "${display}"`));
+-				}
+-				if (details?.timestamp) {
+-					lines.push(theme.fg("dim", `  timestamp: ${details.timestamp}`));
+-				}
+-				if (typeof details?.frames === "number") {
+-					lines.push(theme.fg("dim", `  frames: ${details.frames}`));
+-				}
+-				const preview = textContent.length > 500 ? textContent.slice(0, 500) + "..." : textContent;
+-				lines.push(theme.fg("dim", preview));
+-				return new Text(lines.join("\n"), 0, 0);
+-			}
++		renderCall(args, theme, context) {
++			const { urlList } = normalizeFetchContentParams(args);
++			const label = urlList.length === 1 ? urlList[0] : `${urlList.length} URLs`;
++			const id = (context as { toolCallId?: string } | undefined)?.toolCallId ?? "";
++			return claudeRow((width) => [truncateToWidth(claudeDot(id, theme) + theme.fg("toolTitle", theme.bold("Fetch")) + theme.fg("toolTitle", `(${label})`), width)]);
++		},
+ 
+-			const countColor = (details?.successful ?? 0) > 0 ? "success" : "error";
+-			const statusLine = theme.fg(countColor, `${details?.successful}/${details?.urlCount} URLs`) + theme.fg("muted", getSearchContentEnabled ? " (content stored)" : " (content fetched)");
+-			if (!expanded) {
+-				return new Text(statusLine, 0, 0);
+-			}
+-			const textContent = result.content.find((c) => c.type === "text")?.text || "";
+-			const preview = textContent.length > 500 ? textContent.slice(0, 500) + "..." : textContent;
+-			return new Text(statusLine + "\n" + theme.fg("dim", preview), 0, 0);
++		renderResult(result, { expanded, isPartial }, theme, context) {
++			const details = result.details as { error?: string; totalChars?: number; urlCount?: number; successful?: number } | undefined;
++			const elbow = theme.fg("muted", CLAUDE_ELBOW);
++			if (isPartial) return claudeRow(() => [elbow + theme.fg("muted", "Fetching…")]);
++			const text = result.content.find((c) => c.type === "text")?.text ?? "";
++			if (details?.error || (context as { isError?: boolean } | undefined)?.isError) {
++				return claudeRow((width) => [truncateToWidth(elbow + theme.fg("error", text.split("\n")[0] || `Error: ${details?.error}`), width)]);
++			}
++			const chars = details?.totalChars ?? text.length;
++			const from = (details?.urlCount ?? 1) > 1 ? ` from ${details?.successful ?? 0}/${details?.urlCount} URLs` : "";
++			const head = elbow + theme.fg("toolTitle", "Received ") + theme.fg("toolTitle", theme.bold(`${chars} chars`)) + theme.fg("toolTitle", from);
++			if (!expanded) return claudeRow(() => [head]);
++			const preview = text.split("\n").slice(0, 20).map((line) => theme.fg("muted", `     ${line}`));
++			return claudeRow((width) => [head, ...preview].map((line) => truncateToWidth(line, width)));
+ 		},
+ 	});
+ 

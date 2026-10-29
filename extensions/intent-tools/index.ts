@@ -1,6 +1,6 @@
 import { createBashTool, type BashToolDetails, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
-import { blinkOn, dynamic, failed, finished } from "../claude-tools/rows.ts";
+import { blinkOn, dynamic, failed, finished, summaryFor, watch } from "../claude-tools/rows.ts";
 import { commandLine, doneLine, resultLines, runningLine } from "./render.ts";
 
 // ponytail: map is only a fallback when the model omits `description`.
@@ -102,9 +102,13 @@ export default function (pi: ExtensionAPI) {
 			const output = content?.type === "text" ? content.text : "";
 			const exitMatch = output.match(/exit(?:ed with)? code:? (\d+)/);
 			const id = (context as { toolCallId?: string })?.toolCallId ?? "";
+			const invalidate = (context as { invalidate?: () => void })?.invalidate;
+			if (id && invalidate) watch(id, invalidate);
 			const exitCode = exitMatch ? parseInt(exitMatch[1], 10) : failed.has(id) ? 1 : null;
 			const lines = resultLines(output, exitCode, expanded, details?.truncation?.truncated === true, theme);
-			return dynamic((width) => [doneLine(intent, theme), ...(lines ?? [])].map((line) => truncateToWidth(line, width)));
+			const group = lines === null && !expanded ? summaryFor(id, theme.bold) : null;
+			if (group === "") return dynamic(() => []);
+			return dynamic((width) => [group === null ? doneLine(intent, theme) : theme.fg("muted", group), ...(lines ?? [])].map((line) => truncateToWidth(line, width)));
 		},
 	});
 }

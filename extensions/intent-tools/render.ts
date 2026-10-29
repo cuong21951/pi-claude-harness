@@ -1,3 +1,5 @@
+import { isAbort } from "../claude-tools/rows.ts";
+
 export type Style = { fg: (role: string, text: string) => string; bold: (text: string) => string };
 
 const ELBOW = "  ⎿  ";
@@ -24,6 +26,7 @@ export function resultLines(output: string, exitCode: number | null, expanded: b
 	const first = lines.find((line) => line.trim()) ?? "";
 	const failedStatus = exitCode === 0 || exitCode === null ? "" : `✗ exit ${exitCode} `;
 	const elbow = s.fg("muted", ELBOW);
+	if (isAbort(output)) return null;
 	if (expanded) {
 		const shown = lines.slice(0, EXPANDED_MAX).map((line) => s.fg("muted", INDENT + line));
 		const more = lines.length > EXPANDED_MAX ? [s.fg("muted", `${INDENT}… +${lines.length - EXPANDED_MAX} lines`)] : [];
@@ -48,6 +51,7 @@ if (process.env.INTENT_TOOLS_SELFTEST) {
 	check(commandLine("git status\nmore", tagged) === "<muted>  ⎿  $ git status</muted>", "command shown under the elbow while running");
 	check(resultLines("only\n", 0, false, false, plain) === null, "successful collapsed result draws nothing");
 	check(resultLines("boom", 1, false, false, plain)![0] === "  ⎿  ✗ exit 1 boom", "failed exit stays visible");
+	check(resultLines("Command aborted", 1, false, false, plain) === null, "an aborted command draws no error row (pi core prints Interrupted)");
 	check(resultLines("a\nb\nc", 2, false, false, plain)![0] === "  ⎿  ✗ exit 2 a … +2 lines (ctrl+o to expand)", "failure shows first line and count");
 	check(resultLines("a\nb", 0, true, false, plain)!.join("|") === "  ⎿  |    a|    b", "expanded lists lines");
 	check(resultLines("a\nb", 0, true, true, plain)![0] === "  ⎿  [truncated] ", "truncation flag when expanded");

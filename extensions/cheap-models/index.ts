@@ -4,9 +4,9 @@ import * as path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 type ModelLike = { provider: string; id: string; cost?: { input?: number; output?: number } };
-type Config = { maxInputPerM: number; maxOutputPerM: number; allow: string[]; deny: string[] };
+type Config = { maxInputPerM: number; maxOutputPerM: number; subscriptions: string[]; allow: string[]; deny: string[] };
 
-const DEFAULTS: Config = { maxInputPerM: 1, maxOutputPerM: 3, allow: ["commandcode/*"], deny: [] };
+const DEFAULTS: Config = { maxInputPerM: 1, maxOutputPerM: 3, subscriptions: ["github-copilot/*"], allow: ["commandcode/*"], deny: [] };
 
 function configPath(): string {
 	return path.join(process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent"), "cheap-models.json");
@@ -38,10 +38,12 @@ export function key(model: ModelLike): string {
 }
 
 // ponytail: a model is cheap when it is explicitly allowed, or its catalog price is under the caps.
-// Unknown price counts as expensive; the deny list always wins. pi swallows errors thrown
+// Unknown price counts as expensive; the deny list wins over everything except subscriptions,
+// flat-fee providers whose catalog price is never billed. pi swallows errors thrown
 // from before_provider_request, so the only real guard is swapping the model before a turn.
 export function isCheap(model: ModelLike, cfg: Config): boolean {
 	const k = key(model);
+	if (cfg.subscriptions.some((p) => glob(p).test(k))) return true;
 	if (cfg.deny.some((p) => glob(p).test(k))) return false;
 	if (cfg.allow.some((p) => glob(p).test(k))) return true;
 	const input = model.cost?.input;
@@ -99,6 +101,8 @@ if (process.env.CHEAP_MODELS_SELFTEST) {
 	check(isCheap(proxy, cfg), "commandcode/* is allowed regardless of price");
 	check(!isCheap(unknown, cfg), "unknown price is treated as expensive");
 	check(!isCheap(glm, { ...cfg, deny: ["openrouter/z-ai/*"] }), "deny list wins over price");
+	const copilotOpus = { provider: "github-copilot", id: "claude-opus-5", cost: { input: 5, output: 25 } };
+	check(isCheap(copilotOpus, { ...cfg, deny: ["*opus*"] }), "subscriptions win over price and the deny list");
 	check(pickCheap([fable, glm], cfg)?.id === "z-ai/glm-5.3-flash", "picks the first cheap model");
 	check(pickCheap([glm, proxy], cfg, "commandcode/zai-org/GLM-5.3")?.provider === "commandcode", "prefers the requested cheap model");
 }
